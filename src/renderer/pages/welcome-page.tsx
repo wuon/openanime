@@ -172,8 +172,18 @@ export function WelcomePage() {
   return (
     <div className="container flex flex-col gap-6 p-6 md:p-8 max-w-5xl mx-auto">
       <div className="flex flex-col items-center gap-4">
-        <img className="h-20 w-20 shrink-0 dark:hidden" src={LogoRoundedSquare} alt="" />
-        <img className="h-20 w-20 shrink-0 hidden dark:block" src={LogoRoundedSquareLight} alt="" />
+        <img
+          className="h-20 w-20 shrink-0 dark:hidden select-none pointer-events-none"
+          src={LogoRoundedSquare}
+          alt=""
+          draggable={false}
+        />
+        <img
+          className="h-20 w-20 shrink-0 hidden dark:block select-none pointer-events-none"
+          src={LogoRoundedSquareLight}
+          alt=""
+          draggable={false}
+        />
         <h1 className="text-2xl font-semibold tracking-tight">Openanime</h1>
         <p className="text-muted-foreground text-sm text-center">
           A desktop wrapper on top of{" "}

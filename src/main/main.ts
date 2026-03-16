@@ -14,13 +14,11 @@ const createWindow = () => {
       contextIsolation: true,
       nodeIntegration: true,
       nodeIntegrationInWorker: true,
-      devTools: true,
+      devTools: !app.isPackaged,
     },
     titleBarStyle: "hidden",
     trafficLightPosition: { x: 16, y: 16 },
   });
-
-  registerListeners();
 
   // and load the index.html of the app.
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
@@ -31,13 +29,16 @@ const createWindow = () => {
     );
   }
 
-  mainWindow.webContents.openDevTools();
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools();
+  }
 };
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on("ready", () => {
+  registerListeners();
   void startStreamProxy().then(() => {
     createWindow();
   });
@@ -48,10 +49,7 @@ app.on("ready", () => {
 // explicitly with Cmd + Q.
 app.on("window-all-closed", () => {
   unregisterListeners();
-
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  app.quit();
 });
 
 app.on("activate", () => {
