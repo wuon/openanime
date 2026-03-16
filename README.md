@@ -5,13 +5,13 @@
 ![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/wuon/openanime/latest/total)
 ![GitHub Release](https://img.shields.io/github/v/release/wuon/openanime)
 
-https://github.com/user-attachments/assets/77b137a0-8359-4970-94d8-20127b410c40
-
-Experience [pystardust/ani-cli](https://github.com/pystardust/ani-cli) as a easy to use desktop application. OpenAnime bridges the gap between the command line and a modern UI, offering a streamlined, traditional viewing experience for every anime fan.
-
 [Features](#features) |
 [Installation](#installation) |
 [License](#license)
+
+https://github.com/user-attachments/assets/77b137a0-8359-4970-94d8-20127b410c40
+
+Experience [pystardust/ani-cli](https://github.com/pystardust/ani-cli) as a easy to use desktop application. OpenAnime bridges the gap between the command line and a modern UI, offering a streamlined, traditional viewing experience for every anime fan.
 
 ## Features
 
