@@ -18,6 +18,10 @@ interface StreamUrlResult {
   referer: string;
 }
 
+interface AppContext {
+  version: () => Promise<string>;
+}
+
 export interface UrlOpenerContext {
   openGithub: (url: string) => Promise<void>;
 }
@@ -36,6 +40,7 @@ interface AniCliContext {
 
 declare global {
   interface Window {
+    app: AppContext;
     theme: ThemeContext;
     aniCli: AniCliContext;
     urlOpener: UrlOpenerContext;

@@ -8,6 +8,8 @@ import {
   ANI_CLI_STREAM_URL_CHANNEL,
 } from "./ani-cli/ani-cli-channels";
 import { addAniCliListeners } from "./ani-cli/ani-cli-listeners";
+import { APP_VERSION_CHANNEL } from "./app/app-channels";
+import { addAppEventListeners } from "./app/app-listeners";
 import { EXTERNAL_OPEN_GITHUB_CHANNEL } from "./external/external-channels";
 import { addExternalEventListeners } from "./external/external-listeners";
 import * as THEME_CHANNELS from "./theme/theme-channels";
@@ -17,6 +19,7 @@ export function registerListeners() {
   addThemeEventListeners();
   addAniCliListeners();
   addExternalEventListeners();
+  addAppEventListeners();
 }
 
 export function unregisterListeners() {
@@ -26,6 +29,7 @@ export function unregisterListeners() {
     ANI_CLI_SHOW_DETAILS_CHANNEL,
     ANI_CLI_STREAM_PROXY_BASE_CHANNEL,
     ANI_CLI_STREAM_URL_CHANNEL,
+    APP_VERSION_CHANNEL,
     EXTERNAL_OPEN_GITHUB_CHANNEL,
     ...Object.values(THEME_CHANNELS),
   ];

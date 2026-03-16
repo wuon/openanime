@@ -60,7 +60,7 @@ export function WatchPage() {
         setLoadingEpisode(false);
       }
     },
-    [anime]
+    [anime, state?.searchIndex]
   );
 
   useEffect(() => {
@@ -78,17 +78,25 @@ export function WatchPage() {
         ? aniCli.getEpisodes(state.anime.id, state.anime.mode)
         : Promise.resolve(initialEpisodes),
     ])
-      .then(([d, epList]) => {
-        if (!cancelled) {
-          setDetails(d);
-          if (initialEpisodes.length === 0 && Array.isArray(epList)) {
-            setEpisodes(epList);
-            if (state.preferLatest && epList.length > 0) {
-              const latest = epList[epList.length - 1];
-              setCurrentEpisode(latest);
-            }
-          }
+      .then(async ([d, epList]) => {
+        if (cancelled) return;
+        setDetails(d);
+
+        let episodesToUse = initialEpisodes;
+        if (initialEpisodes.length === 0 && Array.isArray(epList)) {
+          episodesToUse = epList;
+          setEpisodes(epList);
         }
+
+        const fallbackEpisode = episodesToUse[0] ?? "";
+        const preferredEpisode =
+          state.preferLatest && episodesToUse.length > 0
+            ? episodesToUse[episodesToUse.length - 1]
+            : state.currentEpisode || fallbackEpisode;
+
+        if (!preferredEpisode) return;
+        setCurrentEpisode(preferredEpisode);
+        await loadStream(preferredEpisode);
       })
       .catch(() => {
         if (!cancelled)
@@ -100,16 +108,15 @@ export function WatchPage() {
     return () => {
       cancelled = true;
     };
-  }, [state?.anime?.id, state?.anime?.name, state?.anime?.mode, state?.episodes]);
+  }, [state?.anime?.id, state?.anime?.name, state?.anime?.mode, state?.episodes, state?.currentEpisode, state?.preferLatest, loadStream]);
 
-  useEffect(() => {
-    if (!anime || !currentEpisode) return;
-    void loadStream(currentEpisode);
-  }, [anime?.id, currentEpisode]);
-
-  const onEpisodeSelect = useCallback((ep: string) => {
-    setCurrentEpisode(ep);
-  }, []);
+  const onEpisodeSelect = useCallback(
+    (ep: string) => {
+      setCurrentEpisode(ep);
+      void loadStream(ep);
+    },
+    [loadStream]
+  );
 
   if (!state?.anime) {
     return (

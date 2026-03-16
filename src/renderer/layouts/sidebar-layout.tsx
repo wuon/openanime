@@ -1,6 +1,7 @@
 import React from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
+import { AppFooter } from "@/renderer/components/app-footer";
 import { AppSidebar } from "@/renderer/components/sidebar/app-sidebar";
 import { Titlebar } from "@/renderer/components/titlebar";
 import { Separator } from "@/renderer/components/ui/separator";
@@ -19,10 +20,11 @@ export default function SidebarLayout() {
         </div>
       </Titlebar>
       <AppSidebar />
-      <SidebarInset className="pt-12 overflow-x-hidden">
-        <main className="pt-4">
+      <SidebarInset className="pt-12 overflow-x-hidden flex flex-col min-h-screen">
+        <main className="pt-4 flex-1">
           <Outlet />
         </main>
+        <AppFooter />
       </SidebarInset>
     </SidebarProvider>
   );

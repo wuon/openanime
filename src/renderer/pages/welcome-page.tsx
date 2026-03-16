@@ -1,11 +1,9 @@
-import { ChevronDown, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import LogoRoundedSquareLight from "@/renderer/assets/logo-rounded-square-light.svg";
 import LogoRoundedSquare from "@/renderer/assets/logo-rounded-square.svg";
-import { Button } from "@/renderer/components/ui/button";
-import { Card, CardContent } from "@/renderer/components/ui/card";
 import { Input } from "@/renderer/components/ui/input";
 import { useDebouncedValue } from "@/renderer/hooks/use-debounced-value";
 import {
@@ -20,7 +18,7 @@ type EpisodesState =
   | { status: "error"; message: string };
 
 const SEARCH_DEBOUNCE_MS = 500;
-const RECENT_PAGE_SIZE = 12; // 3x4 grid
+const RECENT_PAGE_SIZE = 12;
 
 export function WelcomePage() {
   const navigate = useNavigate();
@@ -34,9 +32,8 @@ export function WelcomePage() {
   const [playingEpisode, setPlayingEpisode] = useState<string | null>(null);
 
   const [recentAnime, setRecentAnime] = useState<AnimeSearchResultType[]>([]);
-  const [recentPage, setRecentPage] = useState(1);
-  const [recentHasMore, setRecentHasMore] = useState(false);
   const [recentLoading, setRecentLoading] = useState(true);
+  const [recentThumbnails, setRecentThumbnails] = useState<Record<string, string | null>>({});
 
   const openAniCliRepo = useCallback(() => {
     const w = window as Window & { urlOpener?: { openGithub?: (url: string) => Promise<void> } };
@@ -83,13 +80,10 @@ export function WelcomePage() {
     setRecentLoading(true);
     /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
     void getAniCli()
-      .getRecent(recentPage, RECENT_PAGE_SIZE)
+      .getRecent(1, RECENT_PAGE_SIZE)
       .then(
         (res: { items: AnimeSearchResultType[]; hasMore: boolean }) => {
-          if (!cancelled) {
-            setRecentAnime(res.items);
-            setRecentHasMore(res.hasMore);
-          }
+          if (!cancelled) setRecentAnime(res.items);
         },
         () => {
           if (!cancelled) setRecentAnime([]);
@@ -102,7 +96,36 @@ export function WelcomePage() {
     return () => {
       cancelled = true;
     };
-  }, [recentPage]);
+  }, []);
+
+  // Fetch thumbnails for recently uploaded shows (used in the carousel)
+  /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
+  useEffect(() => {
+    let cancelled = false;
+    if (recentAnime.length === 0) return;
+    const aniCli = getAniCli();
+    for (const anime of recentAnime) {
+      if (recentThumbnails[anime.id] !== undefined) continue;
+      void (async () => {
+        try {
+          const details = await aniCli.getShowDetails(anime.id);
+          if (cancelled) return;
+          setRecentThumbnails((prev) =>
+            prev[anime.id] !== undefined ? prev : { ...prev, [anime.id]: details.thumbnail ?? null }
+          );
+        } catch {
+          if (cancelled) return;
+          setRecentThumbnails((prev) =>
+            prev[anime.id] !== undefined ? prev : { ...prev, [anime.id]: null }
+          );
+        }
+      })();
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [recentAnime]);
+  /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
 
   const loadEpisodes = useCallback(async (anime: AnimeSearchResultType) => {
     setEpisodesByShowId((prev) => ({ ...prev, [anime.id]: { status: "loading" } }));
@@ -282,57 +305,51 @@ export function WelcomePage() {
       )}
 
       {!debouncedQuery.trim() && (
-        <section className="flex flex-col gap-4">
+        <section className="flex flex-col gap-3">
           <h2 className="text-lg font-semibold">Recently uploaded</h2>
           {recentLoading ? (
             <p className="text-muted-foreground text-sm">Loading…</p>
           ) : recentAnime.length > 0 ? (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {recentAnime.map((anime) => (
-                  <Card
-                    key={anime.id}
-                    className="cursor-pointer transition-colors hover:bg-muted/50"
-                    onClick={() => openRecentAnime(anime)}
-                  >
-                    <CardContent className="p-4">
-                      <p className="font-medium line-clamp-2">{anime.name}</p>
-                      <p className="text-sm text-muted-foreground mt-1">
+            <div className="relative">
+              <div className="flex gap-3 overflow-x-auto pb-2 scroll-smooth">
+                {recentAnime.map((anime) => {
+                  const thumb = recentThumbnails[anime.id] ?? null;
+                  return (
+                    <button
+                      key={anime.id}
+                      type="button"
+                      className="group flex-shrink-0 w-36 sm:w-40 text-left"
+                      onClick={() => openRecentAnime(anime)}
+                    >
+                      <div className="relative w-full aspect-[2/3] rounded-md overflow-hidden border border-border bg-muted">
+                        {thumb ? (
+                          <img
+                            src={thumb}
+                            alt=""
+                            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="h-full w-full bg-muted-foreground/10" />
+                        )}
+                      </div>
+                      <div className="mt-2 h-8 flex flex-col justify-center">
+                        <p className="text-xs font-medium line-clamp-2 break-words">
+                          {anime.name}
+                        </p>
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
                         {anime.episodeCount} episodes · {anime.mode}
                       </p>
-                    </CardContent>
-                  </Card>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="flex items-center justify-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setRecentPage((p) => Math.max(1, p - 1))}
-                  disabled={recentPage <= 1 || recentLoading}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-                <span className="text-sm text-muted-foreground px-2">Page {recentPage}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setRecentPage((p) => p + 1)}
-                  disabled={!recentHasMore || recentLoading}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </>
+            </div>
           ) : (
             <p className="text-muted-foreground text-sm">No recent anime found.</p>
           )}
         </section>
       )}
-
-      <p className="text-center text-xs text-muted-foreground">made with ❤️ from Openanime</p>
     </div>
   );
 }
