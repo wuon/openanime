@@ -59,8 +59,8 @@ const config: ForgeConfig = {
       name: "@electron-forge/publisher-github",
       config: {
         repository: {
-          owner: "opeanime",
-          name: "desktop",
+          owner: "wuon",
+          name: "openanime",
         },
         prerelease: true,
       },
