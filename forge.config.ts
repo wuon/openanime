@@ -13,10 +13,10 @@ const config: ForgeConfig = {
     icon: "./public/icon",
     executableName: "OpenAnime",
     /**
-     * Ship the ani-cli script alongside the app so the main process
-     * can execute it even when running from a packaged build.
+     * Ship external helper binaries/scripts alongside the app so the main
+     * process can execute them even when running from a packaged build.
      */
-    extraResource: ["ani-cli"],
+    extraResource: ["bin/ani-cli", "bin/fzf", "bin/fzf.exe"],
   },
   rebuildConfig: {},
   makers: [new MakerSquirrel({}), new MakerZIP({}, ["darwin"]), new MakerRpm({}), new MakerDeb({})],

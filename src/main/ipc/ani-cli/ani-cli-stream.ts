@@ -5,6 +5,7 @@
 import { spawn } from "child_process";
 import { app } from "electron";
 import path from "path";
+import ffmpeg from "@ffmpeg-installer/ffmpeg";
 
 const DEFAULT_REFERER = "https://allmanga.to";
 
@@ -16,14 +17,19 @@ function getAniCliPath(): string {
     return path.join(process.resourcesPath, "ani-cli");
   }
 
-  // In development, assume ani-cli is in the project root
-  return path.resolve(process.cwd(), "ani-cli");
+  // In development, assume ani-cli is in ./bin
+  return path.resolve(process.cwd(), "bin", "ani-cli");
 }
 
 export interface StreamUrlResult {
   url: string;
   referer: string;
 }
+
+const ffmpegPath = (ffmpeg as unknown as { path: string }).path.replace(
+  "app.asar",
+  "app.asar.unpacked"
+);
 
 /**
  * Build env for the ani-cli child so it behaves like when run from a real terminal.
@@ -35,15 +41,30 @@ export interface StreamUrlResult {
  */
 function buildAniCliEnv(quality: string): NodeJS.ProcessEnv {
   const base = { ...process.env };
-  const extraPath = [
+  const extraPathEntries: string[] = [
     "/opt/homebrew/bin",
     "/usr/local/bin",
     process.platform === "win32" && process.env.ProgramFiles
       ? `${process.env.ProgramFiles}\\curl\\bin`
       : "",
-  ]
-    .filter(Boolean)
-    .join(path.delimiter);
+    // Directory of the bundled ffmpeg binary from @ffmpeg-installer/ffmpeg
+    path.dirname(ffmpegPath),
+  ];
+
+  // When running unpackaged, prefer the local ./bin directory where ani-cli
+  // and ffmpeg are bundled.
+  if (!app.isPackaged) {
+    extraPathEntries.push(path.resolve(process.cwd(), "bin"));
+  }
+
+  // When running from a packaged build, extra resources (ani-cli, ffmpeg)
+  // are placed directly in `process.resourcesPath`.
+  if (app.isPackaged) {
+    extraPathEntries.push(process.resourcesPath);
+  }
+
+  const extraPath = extraPathEntries.filter(Boolean).join(path.delimiter);
+
   return {
     ...base,
     PATH: base.PATH ? `${base.PATH}${path.delimiter}${extraPath}` : extraPath,
