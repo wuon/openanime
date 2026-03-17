@@ -5,7 +5,6 @@
 import { spawn } from "child_process";
 import { app } from "electron";
 import path from "path";
-import ffmpeg from "@ffmpeg-installer/ffmpeg";
 
 const DEFAULT_REFERER = "https://allmanga.to";
 
@@ -26,11 +25,6 @@ export interface StreamUrlResult {
   referer: string;
 }
 
-const ffmpegPath = (ffmpeg as unknown as { path: string }).path.replace(
-  "app.asar",
-  "app.asar.unpacked"
-);
-
 /**
  * Build env for the ani-cli child so it behaves like when run from a real terminal.
  * - PATH: when the app is launched from Dock/Finder, PATH can be minimal and miss
@@ -47,8 +41,6 @@ function buildAniCliEnv(quality: string): NodeJS.ProcessEnv {
     process.platform === "win32" && process.env.ProgramFiles
       ? `${process.env.ProgramFiles}\\curl\\bin`
       : "",
-    // Directory of the bundled ffmpeg binary from @ffmpeg-installer/ffmpeg
-    path.dirname(ffmpegPath),
   ];
 
   // When running unpackaged, prefer the local ./bin directory where ani-cli

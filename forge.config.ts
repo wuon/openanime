@@ -7,16 +7,23 @@ import { VitePlugin } from "@electron-forge/plugin-vite";
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
 
+const isWindows = process.platform === "win32";
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     icon: "./public/icon",
-    executableName: "OpenAnime",
+    executableName: "Openanime",
     /**
      * Ship external helper binaries/scripts alongside the app so the main
      * process can execute them even when running from a packaged build.
+     *
+     * - Windows: ani-cli + fzf.exe (+ ffmpeg if present)
+     * - Other platforms: ani-cli + fzf (+ ffmpeg if present)
      */
-    extraResource: ["bin/ani-cli", "bin/fzf", "bin/fzf.exe"],
+    extraResource: isWindows
+      ? ["bin/ani-cli", "bin/fzf.exe", "bin/ffmpeg"]
+      : ["bin/ani-cli", "bin/fzf", "bin/ffmpeg"],
   },
   rebuildConfig: {},
   makers: [new MakerSquirrel({}), new MakerZIP({}, ["darwin"]), new MakerRpm({}), new MakerDeb({})],
