@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, ImageOff, Search } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -192,6 +192,10 @@ export function WelcomePage() {
     [navigate]
   );
 
+  const handleThumbnailError = useCallback((animeId: string) => {
+    setRecentThumbnails((prev) => (prev[animeId] === null ? prev : { ...prev, [animeId]: null }));
+  }, []);
+
   return (
     <div className="container flex flex-col gap-6 p-6 md:p-8 max-w-5xl mx-auto">
       <div className="flex flex-col items-center gap-4">
@@ -251,7 +255,9 @@ export function WelcomePage() {
                 <button
                   type="button"
                   onClick={() => toggleExpand(anime)}
-                  className="px-4 py-3 flex justify-between items-center gap-4 text-left hover:bg-muted/50 transition-colors rounded-none"
+                  className={`px-4 py-3 flex justify-between items-center gap-4 text-left transition-colors rounded-none ${
+                    isExpanded ? "bg-muted/60" : "hover:bg-muted/50"
+                  }`}
                 >
                   <span className="flex items-center gap-2 font-medium truncate">
                     {isExpanded ? (
@@ -318,28 +324,31 @@ export function WelcomePage() {
                     <button
                       key={anime.id}
                       type="button"
-                      className="group flex-shrink-0 w-36 sm:w-40 text-left"
+                      className="group flex-shrink-0 w-36 sm:w-40 text-left focus-visible:outline-none"
                       onClick={() => openRecentAnime(anime)}
                     >
-                      <div className="relative w-full aspect-[2/3] rounded-md overflow-hidden border border-border bg-muted">
-                        {thumb ? (
-                          <img
-                            src={thumb}
-                            alt=""
-                            className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                          />
-                        ) : (
-                          <div className="h-full w-full bg-muted-foreground/10" />
-                        )}
+                      <div className="relative w-full aspect-[2/3] rounded-2xl border-2 border-border transition-all p-[3px] box-border group-hover:border-primary/80 group-hover:shadow-[0_0_0_1px_rgba(129,140,248,0.7)] group-focus-visible:border-primary/80 group-focus-visible:shadow-[0_0_0_1px_rgba(129,140,248,0.7)]">
+                        <div className="h-full w-full rounded-xl overflow-hidden bg-muted">
+                          {thumb ? (
+                            <img
+                              src={thumb}
+                              alt=""
+                              className="h-full w-full object-cover"
+                              onError={() => handleThumbnailError(anime.id)}
+                            />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center bg-muted-foreground/5 text-muted-foreground/70">
+                              <ImageOff className="h-6 w-6" aria-hidden="true" />
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="mt-2 h-8 flex flex-col justify-center">
-                        <p className="text-xs font-medium line-clamp-2 break-words">
-                          {anime.name}
+                      <div className="mt-2 h-16 flex flex-col items-start justify-start">
+                        <p className="text-xs font-medium line-clamp-2 break-words">{anime.name}</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          Episode {anime.episodeCount} · {anime.mode}
                         </p>
                       </div>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        {anime.episodeCount} episodes · {anime.mode}
-                      </p>
                     </button>
                   );
                 })}
