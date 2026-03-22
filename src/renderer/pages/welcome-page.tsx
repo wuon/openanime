@@ -1,21 +1,16 @@
-import { ChevronDown, ChevronRight, ImageOff, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import LogoRoundedSquareLight from "@/renderer/assets/logo-rounded-square-light.svg";
 import LogoRoundedSquare from "@/renderer/assets/logo-rounded-square.svg";
+import { HorizontalCarousel } from "@/renderer/components/ui/horizontal-carousel";
 import { Input } from "@/renderer/components/ui/input";
 import { useDebouncedValue } from "@/renderer/hooks/use-debounced-value";
 import {
   type AnimeSearchResult as AnimeSearchResultType,
   getAniCli,
 } from "@/renderer/lib/ani-cli-bridge";
-
-type EpisodesState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "loaded"; episodes: string[] }
-  | { status: "error"; message: string };
 
 const SEARCH_DEBOUNCE_MS = 500;
 const RECENT_PAGE_SIZE = 12;
@@ -27,9 +22,7 @@ export function WelcomePage() {
   const [results, setResults] = useState<AnimeSearchResultType[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [episodesByShowId, setEpisodesByShowId] = useState<Record<string, EpisodesState>>({});
-  const [playingEpisode, setPlayingEpisode] = useState<string | null>(null);
+  const [searchThumbnails, setSearchThumbnails] = useState<Record<string, string | null>>({});
 
   const [recentAnime, setRecentAnime] = useState<AnimeSearchResultType[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
@@ -56,8 +49,7 @@ export function WelcomePage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    setExpandedId(null);
-    setEpisodesByShowId({});
+    setSearchThumbnails({});
     const aniCli = getAniCli();
     void aniCli
       .search(q)
@@ -127,53 +119,40 @@ export function WelcomePage() {
   }, [recentAnime]);
   /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
 
-  const loadEpisodes = useCallback(async (anime: AnimeSearchResultType) => {
-    setEpisodesByShowId((prev) => ({ ...prev, [anime.id]: { status: "loading" } }));
-    try {
-      const episodes = await getAniCli().getEpisodes(anime.id, anime.mode);
-      setEpisodesByShowId((prev) => ({
-        ...prev,
-        [anime.id]: { status: "loaded", episodes },
-      }));
-    } catch (err) {
-      setEpisodesByShowId((prev) => ({
-        ...prev,
-        [anime.id]: {
-          status: "error",
-          message: err instanceof Error ? err.message : "Failed to load episodes",
-        },
-      }));
+  // Fetch thumbnails for search results (used in the carousel)
+  useEffect(() => {
+    let cancelled = false;
+    if (results.length === 0) return;
+    const aniCli = getAniCli();
+    for (const anime of results) {
+      if (searchThumbnails[anime.id] !== undefined) continue;
+      void (async () => {
+        try {
+          const details = await aniCli.getShowDetails(anime.id);
+          if (cancelled) return;
+          setSearchThumbnails((prev) =>
+            prev[anime.id] !== undefined ? prev : { ...prev, [anime.id]: details.thumbnail ?? null }
+          );
+        } catch {
+          if (cancelled) return;
+          setSearchThumbnails((prev) =>
+            prev[anime.id] !== undefined ? prev : { ...prev, [anime.id]: null }
+          );
+        }
+      })();
     }
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [results]);
 
-  const toggleExpand = useCallback(
+  const openSearchResult = useCallback(
     (anime: AnimeSearchResultType) => {
-      const isExpanded = expandedId === anime.id;
-      if (isExpanded) {
-        setExpandedId(null);
-      } else {
-        setExpandedId(anime.id);
-        const state = episodesByShowId[anime.id];
-        if (state?.status !== "loaded") void loadEpisodes(anime);
-      }
-    },
-    [expandedId, episodesByShowId, loadEpisodes]
-  );
-
-  const playEpisode = useCallback(
-    (anime: AnimeSearchResultType, episode: string, episodes: string[]) => {
-      setPlayingEpisode(`${anime.id}-${episode}`);
       const indexInResults = results.findIndex((r) => r.id === anime.id);
       const searchIndex = indexInResults >= 0 ? indexInResults + 1 : 1;
-      navigate("/watch", {
-        state: {
-          anime: { id: anime.id, name: anime.name, mode: anime.mode },
-          episodes,
-          currentEpisode: episode,
-          searchIndex,
-        },
+      navigate(`/anime/${anime.id}`, {
+        state: { anime, searchIndex },
       });
-      setPlayingEpisode(null);
     },
     [navigate, results]
   );
@@ -191,10 +170,6 @@ export function WelcomePage() {
     },
     [navigate]
   );
-
-  const handleThumbnailError = useCallback((animeId: string) => {
-    setRecentThumbnails((prev) => (prev[animeId] === null ? prev : { ...prev, [animeId]: null }));
-  }, []);
 
   return (
     <div className="container flex flex-col gap-6 p-6 md:p-8 max-w-5xl mx-auto">
@@ -246,64 +221,18 @@ export function WelcomePage() {
       )}
 
       {results.length > 0 && (
-        <ul className="border border-border rounded-md divide-y divide-border">
-          {results.map((anime) => {
-            const isExpanded = expandedId === anime.id;
-            const episodesState = episodesByShowId[anime.id] ?? { status: "idle" as const };
-            return (
-              <li key={anime.id} className="flex flex-col">
-                <button
-                  type="button"
-                  onClick={() => toggleExpand(anime)}
-                  className={`px-4 py-3 flex justify-between items-center gap-4 text-left transition-colors rounded-none ${
-                    isExpanded ? "bg-muted/60" : "hover:bg-muted/50"
-                  }`}
-                >
-                  <span className="flex items-center gap-2 font-medium truncate">
-                    {isExpanded ? (
-                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    )}
-                    {anime.name}
-                  </span>
-                  <span className="text-muted-foreground text-sm shrink-0">
-                    {anime.episodeCount} episodes ({anime.mode})
-                  </span>
-                </button>
-                {isExpanded && (
-                  <div className="px-4 pb-4 pt-0 border-t border-border/50 bg-muted/20">
-                    {episodesState.status === "loading" && (
-                      <p className="text-sm text-muted-foreground py-2">Loading episodes…</p>
-                    )}
-                    {episodesState.status === "error" && (
-                      <p className="text-sm text-destructive py-2">{episodesState.message}</p>
-                    )}
-                    {episodesState.status === "loaded" && (
-                      <ul className="flex flex-wrap gap-2 py-2">
-                        {episodesState.episodes.map((ep) => {
-                          const isPlaying = playingEpisode === `${anime.id}-${ep}`;
-                          return (
-                            <li key={ep}>
-                              <button
-                                type="button"
-                                onClick={() => playEpisode(anime, ep, episodesState.episodes)}
-                                disabled={isPlaying}
-                                className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs font-medium hover:bg-muted/80 transition-colors disabled:opacity-50"
-                              >
-                                {isPlaying ? "Resolving…" : ep}
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">Search results</h2>
+          <HorizontalCarousel
+            items={results.map((anime) => ({
+              id: anime.id,
+              coverUrl: searchThumbnails[anime.id] ?? null,
+              title: anime.name,
+              subtitle: `Episode ${anime.episodeCount} · ${anime.mode}`,
+              onClick: () => openSearchResult(anime),
+            }))}
+          />
+        </section>
       )}
 
       {!loading && results.length === 0 && debouncedQuery.trim() && !error && (
@@ -316,44 +245,15 @@ export function WelcomePage() {
           {recentLoading ? (
             <p className="text-muted-foreground text-sm">Loading…</p>
           ) : recentAnime.length > 0 ? (
-            <div className="relative">
-              <div className="flex gap-3 overflow-x-auto pb-2 scroll-smooth">
-                {recentAnime.map((anime) => {
-                  const thumb = recentThumbnails[anime.id] ?? null;
-                  return (
-                    <button
-                      key={anime.id}
-                      type="button"
-                      className="group flex-shrink-0 w-36 sm:w-40 text-left focus-visible:outline-none"
-                      onClick={() => openRecentAnime(anime)}
-                    >
-                      <div className="relative w-full aspect-[2/3] rounded-2xl border-2 border-border transition-all p-[3px] box-border group-hover:border-primary/80 group-hover:shadow-[0_0_0_1px_rgba(129,140,248,0.7)] group-focus-visible:border-primary/80 group-focus-visible:shadow-[0_0_0_1px_rgba(129,140,248,0.7)]">
-                        <div className="h-full w-full rounded-xl overflow-hidden bg-muted">
-                          {thumb ? (
-                            <img
-                              src={thumb}
-                              alt=""
-                              className="h-full w-full object-cover"
-                              onError={() => handleThumbnailError(anime.id)}
-                            />
-                          ) : (
-                            <div className="h-full w-full flex items-center justify-center bg-muted-foreground/5 text-muted-foreground/70">
-                              <ImageOff className="h-6 w-6" aria-hidden="true" />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="mt-2 h-16 flex flex-col items-start justify-start">
-                        <p className="text-xs font-medium line-clamp-2 break-words">{anime.name}</p>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          Episode {anime.episodeCount} · {anime.mode}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <HorizontalCarousel
+              items={recentAnime.map((anime) => ({
+                id: anime.id,
+                coverUrl: recentThumbnails[anime.id] ?? null,
+                title: anime.name,
+                subtitle: `Episode ${anime.episodeCount} · ${anime.mode}`,
+                onClick: () => openRecentAnime(anime),
+              }))}
+            />
           ) : (
             <p className="text-muted-foreground text-sm">No recent anime found.</p>
           )}

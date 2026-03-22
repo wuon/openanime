@@ -190,9 +190,9 @@ export async function getEpisodesList(
 }
 
 /**
- * Fetch show details (name, thumbnail, etc.) for the watch page.
+ * Fetch show details (name, thumbnail, synopsis, etc.) for the details/watch page.
  */
-const SHOW_DETAILS_GQL = `query ($showId: String!) { show( _id: $showId ) { _id name thumbnail type } }`;
+const SHOW_DETAILS_GQL = `query ($showId: String!) { show( _id: $showId ) { _id name thumbnail type description } }`;
 
 interface GqlShowDetailsPayload {
   data?: {
@@ -201,6 +201,7 @@ interface GqlShowDetailsPayload {
       name?: string;
       thumbnail?: string;
       type?: string;
+      description?: string | null;
     };
   };
 }
@@ -210,6 +211,7 @@ export interface ShowDetails {
   name: string;
   thumbnail: string | null;
   type: string;
+  description?: string | null;
 }
 
 export async function getShowDetails(showId: string): Promise<ShowDetails> {
@@ -238,5 +240,6 @@ export async function getShowDetails(showId: string): Promise<ShowDetails> {
     name: (show.name ?? "").replace(/\\"/g, '"'),
     thumbnail: show.thumbnail ?? null,
     type: show.type ?? "TV",
+    description: show.description ?? null,
   };
 }

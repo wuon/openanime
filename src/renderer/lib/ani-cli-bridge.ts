@@ -23,6 +23,8 @@ interface ShowDetails {
   name: string;
   thumbnail: string | null;
   type: string;
+  /** Optional synopsis/description if provided by the API. */
+  description?: string | null;
 }
 
 interface AniCliContext {
@@ -36,7 +38,10 @@ interface AniCliContext {
   ) => Promise<StreamUrlResult>;
   getStreamProxyBaseUrl: () => Promise<string>;
   getShowDetails: (showId: string) => Promise<ShowDetails>;
-  getRecent: (page: number, limit?: number) => Promise<{
+  getRecent: (
+    page: number,
+    limit?: number
+  ) => Promise<{
     items: AnimeSearchResult[];
     hasMore: boolean;
   }>;

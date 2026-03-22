@@ -7,6 +7,7 @@ import { initI18n } from "@/renderer/helpers/i18n/i18n";
 import { updateAppLanguage } from "@/renderer/helpers/i18n/language-helpers";
 import { syncThemeWithLocal } from "@/renderer/helpers/theme/theme-helper";
 import BaseLayout from "@/renderer/layouts/base-layout";
+import { AnimeDetailsPage } from "@/renderer/pages/anime-details-page";
 import { AnimeSearchPage } from "@/renderer/pages/anime-search-page";
 import { PlayerPage } from "@/renderer/pages/player-page";
 import { WatchPage } from "@/renderer/pages/watch-page";
@@ -25,6 +26,7 @@ export default function App() {
       <Routes>
         <Route element={<BaseLayout />}>
           <Route path="/" element={<WelcomePage />} />
+          <Route path="/anime/:id" element={<AnimeDetailsPage />} />
           <Route path="/anime" element={<AnimeSearchPage />} />
           <Route path="/watch" element={<WatchPage />} />
           <Route path="/player" element={<PlayerPage />} />

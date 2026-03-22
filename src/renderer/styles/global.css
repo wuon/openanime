@@ -138,6 +138,15 @@
     scrollbar-gutter: stable;
     user-select: none;
   }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
   .draglayer {
     @apply bg-background;
     -webkit-app-region: drag;

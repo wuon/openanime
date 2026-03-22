@@ -24,9 +24,7 @@ export interface StreamUrlResult {
 export function exposeAniCliContext() {
   contextBridge.exposeInMainWorld("aniCli", {
     search: (query: string) =>
-      ipcRenderer.invoke(ANI_CLI_SEARCH_CHANNEL, query) as Promise<
-        AnimeSearchResult[]
-      >,
+      ipcRenderer.invoke(ANI_CLI_SEARCH_CHANNEL, query) as Promise<AnimeSearchResult[]>,
     getEpisodes: (showId: string, mode?: "sub" | "dub") =>
       ipcRenderer.invoke(ANI_CLI_EPISODES_CHANNEL, showId, mode ?? "sub") as Promise<string[]>,
     getStreamUrl: (
@@ -50,6 +48,7 @@ export function exposeAniCliContext() {
         name: string;
         thumbnail: string | null;
         type: string;
+        description?: string | null;
       }>,
     getRecent: (page: number, limit?: number) =>
       ipcRenderer.invoke(ANI_CLI_RECENT_CHANNEL, page, limit) as Promise<{

@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -100,7 +100,7 @@ export function WatchPage() {
       })
       .catch(() => {
         if (!cancelled)
-          setDetails({ id: state.anime!.id, name: state.anime!.name, thumbnail: null, type: "TV" });
+          setDetails({ id: state.anime.id, name: state.anime.name, thumbnail: null, type: "TV" });
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -108,7 +108,15 @@ export function WatchPage() {
     return () => {
       cancelled = true;
     };
-  }, [state?.anime?.id, state?.anime?.name, state?.anime?.mode, state?.episodes, state?.currentEpisode, state?.preferLatest, loadStream]);
+  }, [
+    state?.anime?.id,
+    state?.anime?.name,
+    state?.anime?.mode,
+    state?.episodes,
+    state?.currentEpisode,
+    state?.preferLatest,
+    loadStream,
+  ]);
 
   const onEpisodeSelect = useCallback(
     (ep: string) => {
@@ -132,21 +140,37 @@ export function WatchPage() {
   }
 
   const displayName = details?.name ?? anime.name;
-  const episodeLabel = currentEpisode ? `Episode ${currentEpisode}` : "—";
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-border shrink-0">
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-border shrink-0">
         <Button variant="ghost" size="icon" asChild>
           <Link to="/">
             <ArrowLeft className="h-5 w-5" />
           </Link>
         </Button>
-        <span className="text-sm font-medium truncate flex-1">{displayName}</span>
+        <span className="text-sm font-medium truncate flex-1 min-w-0">
+          {displayName} ({anime.mode === "dub" ? "Dub" : "Sub"})
+        </span>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <Select value={currentEpisode} onValueChange={onEpisodeSelect} disabled={loadingEpisode}>
+            <SelectTrigger className="w-[120px] bg-background h-8">
+              <SelectValue placeholder="Episode" />
+            </SelectTrigger>
+            <SelectContent>
+              {episodes.map((ep) => (
+                <SelectItem key={ep} value={ep}>
+                  Episode {ep}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Video player - fixed 16:9 area, centered */}
-      <div className="w-full bg-muted/30 flex items-center justify-center shrink-0">
+      <div className="w-full flex items-center justify-center shrink-0 p-16">
         <div className="w-full max-w-5xl px-4">
           <div className="relative w-full aspect-video bg-black rounded-md overflow-hidden flex items-center justify-center">
             {loadingEpisode && !playUrl ? (
@@ -173,53 +197,6 @@ export function WatchPage() {
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Control bar */}
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-border bg-muted/20 shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground whitespace-nowrap">Episode</span>
-          <Select value={currentEpisode} onValueChange={onEpisodeSelect} disabled={loadingEpisode}>
-            <SelectTrigger className="w-[140px] bg-background">
-              <SelectValue placeholder="Episode" />
-            </SelectTrigger>
-            <SelectContent>
-              {episodes.map((ep) => (
-                <SelectItem key={ep} value={ep}>
-                  Episode {ep}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="text-sm text-muted-foreground">
-          {anime.mode === "dub" ? "Dubbed" : "Subbed"}
-        </div>
-      </div>
-
-      {/* Anime details */}
-      <div className="flex gap-4 p-4 flex-1 min-h-0">
-        {details?.thumbnail ? (
-          <img
-            src={details.thumbnail}
-            alt=""
-            className="w-24 h-32 object-cover rounded-md border border-border shrink-0 bg-muted"
-          />
-        ) : (
-          <div className="w-24 h-32 rounded-md border border-border bg-muted shrink-0 flex items-center justify-center text-muted-foreground text-xs">
-            No image
-          </div>
-        )}
-        <div className="flex flex-col gap-1 min-w-0 flex-1">
-          <h1 className="font-semibold text-lg truncate">{displayName}</h1>
-          <p className="text-sm text-muted-foreground">
-            {details?.type ?? "TV"} – {episodeLabel}
-            {episodes.length > 0 && ` (${episodes.length} episodes)`}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {anime.mode === "dub" ? "Dubbed" : "Subbed"}
-          </p>
         </div>
       </div>
     </div>
