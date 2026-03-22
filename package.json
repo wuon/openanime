@@ -1,8 +1,8 @@
 {
   "name": "openanime",
   "productName": "Openanime",
-  "version": "0.0.1-alpha",
-  "description": "My Electron application description",
+  "version": "0.0.2-alpha",
+  "description": "Experience pystardust/ani-cli as an easy to use desktop application.",
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",
@@ -47,7 +47,7 @@
   },
   "keywords": [],
   "author": {
-    "name": "Daniel Wu",
+    "name": "wuon",
     "email": "20260270+wuon@users.noreply.github.com"
   },
   "license": "MIT",

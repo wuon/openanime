@@ -134,7 +134,10 @@ export function WelcomePage() {
           setRecentlyWatchedDetails((prev) =>
             prev[entry.animeId] !== undefined
               ? prev
-              : { ...prev, [entry.animeId]: { name: details.name, thumbnail: details.thumbnail ?? null } }
+              : {
+                  ...prev,
+                  [entry.animeId]: { name: details.name, thumbnail: details.thumbnail ?? null },
+                }
           );
         } catch {
           if (cancelled) return;
