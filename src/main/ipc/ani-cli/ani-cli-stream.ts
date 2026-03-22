@@ -110,14 +110,12 @@ function runAniCliForStream(
 }
 
 export async function getStreamUrl(
-  animeName: string,
+  showId: string,
   episode: string,
-  mode: "sub" | "dub" = "sub",
-  selectIndex?: number
+  mode: "sub" | "dub" = "sub"
 ): Promise<StreamUrlResult> {
   const aniCliPath = getAniCliPath();
-  const index = selectIndex && selectIndex > 0 ? selectIndex : 1;
-  const args = [animeName.trim(), "-S", String(index), "-e", episode];
+  const args = ["--id", showId.trim(), "-e", episode];
   if (mode === "dub") args.push("--dub");
 
   // Try "best" first (highest available). For older anime where max is 720p, the

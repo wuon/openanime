@@ -148,13 +148,11 @@ export function WelcomePage() {
 
   const openSearchResult = useCallback(
     (anime: AnimeSearchResultType) => {
-      const indexInResults = results.findIndex((r) => r.id === anime.id);
-      const searchIndex = indexInResults >= 0 ? indexInResults + 1 : 1;
       navigate(`/anime/${anime.id}`, {
-        state: { anime, searchIndex },
+        state: { anime },
       });
     },
-    [navigate, results]
+    [navigate]
   );
 
   const openRecentAnime = useCallback(

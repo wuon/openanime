@@ -84,6 +84,10 @@ help_info() {
         Display a countdown to the next episode
       -U, --update
         Update the script
+      -I, --id, --stream-id <showId>
+        Fetch stream URL directly by show ID (use with -e for episode)
+      --print-url
+        Print the stream URL only (use with -I)
     Some example usages:
       %s -q 720p banana fish
       %s --skip --skip-title \"one piece\" -S 2 one piece
@@ -91,7 +95,8 @@ help_info() {
       %s --vlc cyberpunk edgerunners -q 1080p -e 4
       %s blue lock -e 5-6
       %s -e \"5 6\" blue lock
-    \n" "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}"
+      %s --id qpeexkeTa7DzLjRnp -e 5 --print-url
+    \n" "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}" "${0##*/}"
     exit 0
 }
 
@@ -261,6 +266,13 @@ episodes_list() {
 |g; s|"||g' | sort -n -k 1
 }
 
+# get show name and episodes by show ID
+get_show_info() {
+    #shellcheck disable=SC2016
+    show_info_gql='query ($showId: String!) { show( _id: $showId ) { name availableEpisodesDetail }}'
+    curl -e "$allanime_refr" -s -G "${allanime_api}/api" --data-urlencode "variables={\"showId\":\"$*\"}" --data-urlencode "query=$show_info_gql" -A "$agent"
+}
+
 # PLAYING
 
 process_hist_entry() {
@@ -397,6 +409,7 @@ hist_dir="${ANI_CLI_HIST_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/ani-cli}"
 histfile="$hist_dir/ani-hsts"
 [ ! -f "$histfile" ] && : >"$histfile"
 search="${ANI_CLI_DEFAULT_SOURCE:-scrape}"
+print_url="${ANI_CLI_PRINT_URL:-0}"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -461,6 +474,14 @@ while [ $# -gt 0 ]; do
             ;;
         -N | --nextep-countdown) search=nextep ;;
         -U | --update) update_script ;;
+        -I | --id | --stream-id)
+            [ $# -lt 2 ] && die "missing argument!"
+            stream_id="$2"
+            shift
+            search=stream_id
+            [ -z "$ep_no" ] && ep_no="1"
+            ;;
+        --print-url) print_url=1 ;;
         *) query="$(printf "%s" "$query $1" | sed "s|^ ||;s| |+|g")" ;;
     esac
     shift
@@ -483,6 +504,18 @@ esac
 
 # searching
 case "$search" in
+    stream_id)
+        id="$stream_id"
+        [ -z "$id" ] && die "Show ID required"
+        [ -z "$ep_no" ] && ep_no="1"
+        show_info="$(get_show_info "$id")"
+        title="$(printf '%s' "$show_info" | sed -nE 's|.*"name":"([^"]*)"[^}]*.*|\1|p' | sed 's|\\"||g')"
+        [ -z "$title" ] && die "Show not found: $id"
+        ep_list="$(printf '%s' "$show_info" | sed -nE "s|.*$mode\":\[([0-9.\",]*)\].*|\1|p" | sed 's|,|\n|g; s|"||g' | sort -n -k 1)"
+        [ -z "$ep_list" ] && die "No episodes found for: $id"
+        printf '%s' "$ep_list" | grep -qFx "$ep_no" || die "Episode $ep_no not available for: $id"
+        allanime_title="$(printf "%s" "$title" | cut -d'(' -f1 | tr -d '[:punct:]')"
+        ;;
     history)
         anime_list=$(while read -r ep_no id title; do process_hist_entry & done <"$histfile")
         wait
@@ -522,6 +555,13 @@ case "$search" in
         ;;
 esac
 [ "$skip_intro" = 1 ] && mal_id="$(ani-skip -q "${skip_title:-${title}}")"
+
+# print URL only and exit (used with -I)
+if [ "$print_url" = 1 ]; then
+    get_episode_url
+    printf "%s\n" "$episode"
+    exit 0
+fi
 
 # moves the cursor up one line and clears that line
 tput cuu1 && tput el

@@ -30,12 +30,7 @@ interface ShowDetails {
 interface AniCliContext {
   search: (query: string) => Promise<AnimeSearchResult[]>;
   getEpisodes: (showId: string, mode?: "sub" | "dub") => Promise<string[]>;
-  getStreamUrl: (
-    animeName: string,
-    episode: string,
-    mode?: "sub" | "dub",
-    selectIndex?: number
-  ) => Promise<StreamUrlResult>;
+  getStreamUrl: (showId: string, episode: string, mode?: "sub" | "dub") => Promise<StreamUrlResult>;
   getStreamProxyBaseUrl: () => Promise<string>;
   getShowDetails: (showId: string) => Promise<ShowDetails>;
   getRecent: (

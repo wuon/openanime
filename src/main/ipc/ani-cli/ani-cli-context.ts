@@ -27,18 +27,12 @@ export function exposeAniCliContext() {
       ipcRenderer.invoke(ANI_CLI_SEARCH_CHANNEL, query) as Promise<AnimeSearchResult[]>,
     getEpisodes: (showId: string, mode?: "sub" | "dub") =>
       ipcRenderer.invoke(ANI_CLI_EPISODES_CHANNEL, showId, mode ?? "sub") as Promise<string[]>,
-    getStreamUrl: (
-      animeName: string,
-      episode: string,
-      mode?: "sub" | "dub",
-      selectIndex?: number
-    ) =>
+    getStreamUrl: (showId: string, episode: string, mode?: "sub" | "dub") =>
       ipcRenderer.invoke(
         ANI_CLI_STREAM_URL_CHANNEL,
-        animeName,
+        showId,
         episode,
-        mode ?? "sub",
-        selectIndex
+        mode ?? "sub"
       ) as Promise<StreamUrlResult>,
     getStreamProxyBaseUrl: () =>
       ipcRenderer.invoke(ANI_CLI_STREAM_PROXY_BASE_CHANNEL) as Promise<string>,

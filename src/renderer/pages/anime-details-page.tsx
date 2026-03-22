@@ -13,7 +13,6 @@ type EpisodesState =
 
 interface LocationState {
   anime?: AnimeSearchResult;
-  searchIndex?: number;
 }
 
 export function AnimeDetailsPage() {
@@ -60,19 +59,18 @@ export function AnimeDetailsPage() {
 
   const playEpisode = useCallback(
     (episode: string, episodes: string[]) => {
-      if (!anime?.name) return;
+      if (!anime?.id) return;
       setPlayingEpisode(episode);
       navigate("/watch", {
         state: {
           anime: { id: anime.id, name: anime.name, mode: anime.mode },
           episodes,
           currentEpisode: episode,
-          searchIndex: state?.searchIndex,
         },
       });
       setPlayingEpisode(null);
     },
-    [navigate, anime, state?.searchIndex]
+    [navigate, anime]
   );
 
   if (!id) {

@@ -25,8 +25,8 @@ export function addAniCliListeners() {
   );
   ipcMain.handle(
     ANI_CLI_STREAM_URL_CHANNEL,
-    (_event, animeName: string, episode: string, mode: "sub" | "dub", selectIndex?: number) =>
-      getStreamUrl(animeName, episode, mode, selectIndex)
+    (_event, showId: string, episode: string, mode: "sub" | "dub") =>
+      getStreamUrl(showId, episode, mode)
   );
   ipcMain.handle(ANI_CLI_STREAM_PROXY_BASE_CHANNEL, () => getStreamProxyBaseUrl());
   ipcMain.handle(ANI_CLI_SHOW_DETAILS_CHANNEL, (_event, showId: string) => getShowDetails(showId));

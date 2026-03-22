@@ -18,8 +18,6 @@ interface WatchState {
   currentEpisode: string;
   /** When true, open on the latest episode (e.g. from recently uploaded tile) */
   preferLatest?: boolean;
-  /** 1-based index of this anime in the search results, for ani-cli -S */
-  searchIndex?: number;
 }
 
 export function WatchPage() {
@@ -39,16 +37,15 @@ export function WatchPage() {
 
   const loadStream = useCallback(
     async (ep: string) => {
-      if (!anime?.name || !ep) return;
+      if (!anime?.id || !ep) return;
       setLoadingEpisode(true);
       setError(null);
       try {
         const aniCli = getAniCli();
         const { url, referer } = await aniCli.getStreamUrl(
-          anime.name,
+          anime.id,
           ep,
-          anime.mode,
-          state?.searchIndex
+          anime.mode
         );
         const base = await aniCli.getStreamProxyBaseUrl();
         const urlWithProxy = `${base}/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
@@ -60,7 +57,7 @@ export function WatchPage() {
         setLoadingEpisode(false);
       }
     },
-    [anime, state?.searchIndex]
+    [anime]
   );
 
   useEffect(() => {
