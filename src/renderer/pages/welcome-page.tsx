@@ -11,6 +11,10 @@ import {
   type AnimeSearchResult as AnimeSearchResultType,
   getAniCli,
 } from "@/renderer/lib/ani-cli-bridge";
+import {
+  type RecentlyWatchedEntry,
+  getRecentlyWatched,
+} from "@/renderer/lib/recently-watched-bridge";
 
 const SEARCH_DEBOUNCE_MS = 500;
 const RECENT_PAGE_SIZE = 12;
@@ -27,6 +31,12 @@ export function WelcomePage() {
   const [recentAnime, setRecentAnime] = useState<AnimeSearchResultType[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
   const [recentThumbnails, setRecentThumbnails] = useState<Record<string, string | null>>({});
+
+  const [recentlyWatched, setRecentlyWatched] = useState<RecentlyWatchedEntry[]>([]);
+  const [recentlyWatchedLoading, setRecentlyWatchedLoading] = useState(true);
+  const [recentlyWatchedDetails, setRecentlyWatchedDetails] = useState<
+    Record<string, { name: string; thumbnail: string | null }>
+  >({});
 
   const openAniCliRepo = useCallback(() => {
     const w = window as Window & { urlOpener?: { openGithub?: (url: string) => Promise<void> } };
@@ -89,6 +99,57 @@ export function WelcomePage() {
       cancelled = true;
     };
   }, []);
+
+  // Fetch recently watched entries
+  useEffect(() => {
+    let cancelled = false;
+    setRecentlyWatchedLoading(true);
+    void getRecentlyWatched()
+      .read()
+      .then((entries) => {
+        if (!cancelled) setRecentlyWatched(entries);
+      })
+      .finally(() => {
+        if (!cancelled) setRecentlyWatchedLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Fetch details (name + thumbnail) for recently watched (by animeId)
+  useEffect(() => {
+    let cancelled = false;
+    if (recentlyWatched.length === 0) return;
+    const aniCli = getAniCli();
+    const seen = new Set<string>();
+    for (const entry of recentlyWatched) {
+      if (seen.has(entry.animeId)) continue;
+      seen.add(entry.animeId);
+      if (recentlyWatchedDetails[entry.animeId] !== undefined) continue;
+      void (async () => {
+        try {
+          const details = await aniCli.getShowDetails(entry.animeId);
+          if (cancelled) return;
+          setRecentlyWatchedDetails((prev) =>
+            prev[entry.animeId] !== undefined
+              ? prev
+              : { ...prev, [entry.animeId]: { name: details.name, thumbnail: details.thumbnail ?? null } }
+          );
+        } catch {
+          if (cancelled) return;
+          setRecentlyWatchedDetails((prev) =>
+            prev[entry.animeId] !== undefined
+              ? prev
+              : { ...prev, [entry.animeId]: { name: entry.animeId, thumbnail: null } }
+          );
+        }
+      })();
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [recentlyWatched]);
 
   // Fetch thumbnails for recently uploaded shows (used in the carousel)
   /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
@@ -169,6 +230,20 @@ export function WelcomePage() {
     [navigate]
   );
 
+  const openRecentlyWatched = useCallback(
+    (entry: RecentlyWatchedEntry) => {
+      const name = recentlyWatchedDetails[entry.animeId]?.name ?? "Anime";
+      navigate("/watch", {
+        state: {
+          anime: { id: entry.animeId, name, mode: entry.mode },
+          episodes: [],
+          currentEpisode: entry.episode,
+        },
+      });
+    },
+    [navigate, recentlyWatchedDetails]
+  );
+
   return (
     <div className="container flex flex-col gap-6 p-6 md:p-8 max-w-5xl mx-auto">
       <div className="flex flex-col items-center gap-4">
@@ -238,24 +313,44 @@ export function WelcomePage() {
       )}
 
       {!debouncedQuery.trim() && (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-lg font-semibold">Recently uploaded</h2>
-          {recentLoading ? (
-            <p className="text-muted-foreground text-sm">Loading…</p>
-          ) : recentAnime.length > 0 ? (
-            <HorizontalCarousel
-              items={recentAnime.map((anime) => ({
-                id: anime.id,
-                coverUrl: recentThumbnails[anime.id] ?? null,
-                title: anime.name,
-                subtitle: `Episode ${anime.episodeCount} · ${anime.mode}`,
-                onClick: () => openRecentAnime(anime),
-              }))}
-            />
-          ) : (
-            <p className="text-muted-foreground text-sm">No recent anime found.</p>
-          )}
-        </section>
+        <>
+          <section className="flex flex-col gap-3">
+            <h2 className="text-lg font-semibold">Recently watched</h2>
+            {recentlyWatchedLoading ? (
+              <p className="text-muted-foreground text-sm">Loading…</p>
+            ) : recentlyWatched.length > 0 ? (
+              <HorizontalCarousel
+                items={recentlyWatched.map((entry, index) => ({
+                  id: `${entry.animeId}-${entry.episode}-${index}`,
+                  coverUrl: recentlyWatchedDetails[entry.animeId]?.thumbnail ?? null,
+                  title: recentlyWatchedDetails[entry.animeId]?.name ?? entry.animeId,
+                  subtitle: `Episode ${entry.episode} · ${entry.mode}`,
+                  onClick: () => openRecentlyWatched(entry),
+                }))}
+              />
+            ) : (
+              <p className="text-muted-foreground text-sm">No recently watched anime.</p>
+            )}
+          </section>
+          <section className="flex flex-col gap-3">
+            <h2 className="text-lg font-semibold">Recently uploaded</h2>
+            {recentLoading ? (
+              <p className="text-muted-foreground text-sm">Loading…</p>
+            ) : recentAnime.length > 0 ? (
+              <HorizontalCarousel
+                items={recentAnime.map((anime) => ({
+                  id: anime.id,
+                  coverUrl: recentThumbnails[anime.id] ?? null,
+                  title: anime.name,
+                  subtitle: `Episode ${anime.episodeCount} · ${anime.mode}`,
+                  onClick: () => openRecentAnime(anime),
+                }))}
+              />
+            ) : (
+              <p className="text-muted-foreground text-sm">No recent anime found.</p>
+            )}
+          </section>
+        </>
       )}
     </div>
   );

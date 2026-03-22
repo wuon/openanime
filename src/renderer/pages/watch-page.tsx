@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/renderer/components/ui/select";
 import { type ShowDetails, getAniCli } from "@/renderer/lib/ani-cli-bridge";
+import { getRecentlyWatched } from "@/renderer/lib/recently-watched-bridge";
 
 interface WatchState {
   anime: { id: string; name: string; mode: "sub" | "dub" };
@@ -51,6 +52,11 @@ export function WatchPage() {
         const urlWithProxy = `${base}/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
         setPlayUrl(urlWithProxy);
         setCurrentEpisode(ep);
+        try {
+          await getRecentlyWatched().record(anime.id, ep, anime.mode);
+        } catch {
+          // Ignore - recording is best-effort
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load stream");
       } finally {
