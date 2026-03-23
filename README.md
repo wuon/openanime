@@ -9,7 +9,7 @@
 [Installation](#installation) |
 [License](#license)
 
-https://github.com/user-attachments/assets/77b137a0-8359-4970-94d8-20127b410c40
+https://github.com/user-attachments/assets/14a3e2e0-3b84-46bb-9b61-546adb8e23a2
 
 Experience [pystardust/ani-cli](https://github.com/pystardust/ani-cli) as a easy to use desktop application. Openanime bridges the gap between the command line and a modern UI, offering a streamlined, traditional viewing experience for every anime fan.
 
