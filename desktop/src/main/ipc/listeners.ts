@@ -19,6 +19,13 @@ import {
 import { addExternalEventListeners } from "./external/external-listeners";
 import * as THEME_CHANNELS from "./theme/theme-channels";
 import { addThemeEventListeners } from "./theme/theme-listeners";
+import { addWindowEventListeners } from "./window/window-listeners";
+import {
+  WINDOW_CLOSE_CHANNEL,
+  WINDOW_IS_MAXIMIZED_CHANNEL,
+  WINDOW_MINIMIZE_CHANNEL,
+  WINDOW_TOGGLE_MAXIMIZE_CHANNEL,
+} from "./window/window-channels";
 
 export function registerListeners() {
   addThemeEventListeners();
@@ -26,6 +33,7 @@ export function registerListeners() {
   addRecentlyWatchedListeners();
   addExternalEventListeners();
   addAppEventListeners();
+  addWindowEventListeners();
 }
 
 export function unregisterListeners() {
@@ -39,6 +47,10 @@ export function unregisterListeners() {
     EXTERNAL_OPEN_GITHUB_CHANNEL,
     RECENTLY_WATCHED_READ_CHANNEL,
     RECENTLY_WATCHED_RECORD_CHANNEL,
+    WINDOW_MINIMIZE_CHANNEL,
+    WINDOW_CLOSE_CHANNEL,
+    WINDOW_TOGGLE_MAXIMIZE_CHANNEL,
+    WINDOW_IS_MAXIMIZED_CHANNEL,
     ...Object.values(THEME_CHANNELS),
   ];
 
