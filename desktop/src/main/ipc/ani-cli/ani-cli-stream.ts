@@ -35,13 +35,7 @@ export interface StreamUrlResult {
  */
 function buildAniCliEnv(quality: string): NodeJS.ProcessEnv {
   const base = { ...process.env };
-  const extraPathEntries: string[] = [
-    "/opt/homebrew/bin",
-    "/usr/local/bin",
-    process.platform === "win32" && process.env.ProgramFiles
-      ? `${process.env.ProgramFiles}\\curl\\bin`
-      : "",
-  ];
+  const extraPathEntries: string[] = [];
 
   // When running unpackaged, prefer the local ./bin directory where ani-cli
   // and ffmpeg are bundled.
@@ -75,37 +69,80 @@ function runAniCliForStream(
   args: string[],
   quality: string
 ): Promise<StreamUrlResult | null> {
+  const shellCandidates: string[] = [];
+
+  if (process.platform === "darwin" || process.platform === "linux") {
+    shellCandidates.push("sh");
+  }
+
+  if (process.platform === "win32") {
+    shellCandidates.push(
+      "C:\\Program Files\\Git\\bin\\bash.exe",
+      "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+      "C:\\msys64\\usr\\bin\\bash.exe"
+    );
+  }
+
   return new Promise((resolve) => {
-    const child = spawn("sh", [aniCliPath, ...args], {
-      env: buildAniCliEnv(quality),
-      cwd: path.dirname(aniCliPath),
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
     let stdout = "";
-    child.stdout?.on("data", (chunk) => {
-      stdout += (chunk as Buffer).toString();
-    });
-    child.stderr?.on("data", () => {
-      /* empty */
-    });
-
-    child.on("error", () => resolve(null));
-
-    child.on("close", () => {
-      const lines = stdout
-        .split(/\r?\n/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const urlLine = lines.find(
-        (line) => line.startsWith("http://") || line.startsWith("https://")
-      );
-      if (urlLine) {
-        resolve({ url: urlLine, referer: DEFAULT_REFERER });
-      } else {
+    let resolved = false;
+    const tryNext = (index: number) => {
+      if (index >= shellCandidates.length) {
         resolve(null);
+        return;
       }
-    });
+
+      const shell = shellCandidates[index];
+
+      // Reset stdout for each shell attempt.
+      stdout = "";
+      resolved = false;
+
+      const child = spawn(shell, [aniCliPath, ...args], {
+        env: buildAniCliEnv(quality),
+        cwd: path.dirname(aniCliPath),
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    
+      child.stdout?.on("data", (chunk) => {
+        stdout += (chunk as Buffer).toString();
+      });
+
+      // We don't need stderr content, but keep pipe drained.
+      child.stderr?.on("data", () => {
+        /* empty */
+      });
+
+      child.on("error", (error) => {
+        // If the shell itself cannot be spawned (ENOENT), try the next one.
+        console.log(error);
+        if (!resolved) {
+          resolved = true;
+          tryNext(index + 1);
+        }
+      });
+
+      child.on("close", () => {
+        const lines = stdout
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const urlLine = lines.find(
+          (line) => line.startsWith("http://") || line.startsWith("https://")
+        );
+
+        if (urlLine) {
+          resolved = true;
+          resolve({ url: urlLine, referer: DEFAULT_REFERER });
+        } else {
+          // Shell started, but ani-cli didn't return a URL; try next shell attempt.
+          // (Maybe the script is being interpreted differently.)
+          tryNext(index + 1);
+        }
+      });
+    };
+
+    tryNext(0);
   });
 }
 
