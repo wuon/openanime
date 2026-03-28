@@ -218,7 +218,7 @@ get_episode_url() {
     resp=$(curl -e "$allanime_refr" -s -G "${allanime_api}/api" --data-urlencode "variables={\"showId\":\"$id\",\"translationType\":\"$mode\",\"episodeString\":\"$ep_no\"}" --data-urlencode "query=$episode_embed_gql" -A "$agent" | tr '{}' '\n' | sed 's|\\u002F|\/|g;s|\\||g' | sed -nE 's|.*sourceUrl":"--([^"]*)".*sourceName":"([^"]*)".*|\2 :\1|p')
     # generate links into sequential files
     cache_dir="$(mktemp -d)"
-    providers="1 2 3 4"
+    providers="1 2 3"
     for provider in $providers; do
         generate_link "$provider" >"$cache_dir"/"$provider" &
     done
