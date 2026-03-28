@@ -24,14 +24,14 @@ export function Hero({ stats }: HeroProps) {
               alt=""
               width={40}
               height={40}
-              className="size-10 rounded-xl object-contain dark:hidden"
+              className="size-10 object-contain dark:hidden"
             />
             <Image
               src="/logo-light.svg"
               alt=""
               width={40}
               height={40}
-              className="hidden size-10 rounded-xl object-contain dark:block"
+              className="hidden size-10 object-contain dark:block"
             />
           </div>
           <span className="font-sans text-xl font-semibold tracking-tight text-foreground">
