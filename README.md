@@ -2,7 +2,7 @@
 
 # Openanime
 
-![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/wuon/openanime/latest/total)
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/wuon/openanime/total)
 ![GitHub Release](https://img.shields.io/github/v/release/wuon/openanime)
 
 [Features](#features) |
