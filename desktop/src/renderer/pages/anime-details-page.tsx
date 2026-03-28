@@ -1,12 +1,9 @@
-import { Button } from "@/renderer/components/ui/button";
-import {
-  type AnimeSearchResult,
-  type ShowDetails,
-  getAniCli,
-} from "@/renderer/lib/ani-cli-bridge";
 import { ArrowLeft, Loader2, Play } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+
+import { Button } from "@/renderer/components/ui/button";
+import { type AnimeSearchResult, type ShowDetails, getAniCli } from "@/renderer/lib/ani-cli-bridge";
 
 type EpisodesState =
   | { status: "idle" }
@@ -116,67 +113,73 @@ export function AnimeDetailsPage() {
   const episodes = episodesState.status === "loaded" ? episodesState.episodes : [];
 
   return (
-    <div className="container flex flex-col gap-6 p-6 md:p-8 max-w-3xl mx-auto">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" asChild>
-          <Link to="/">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-        </Button>
-        <h1 className="text-xl font-semibold truncate flex-1">{displayName}</h1>
-      </div>
+    <>
+      <div className="flex flex-col h-full min-h-0">
+        <div className="sticky top-12 z-10 flex items-center gap-3 px-4 py-2 border-b border-border shrink-0 bg-background">
+          <Button variant="ghost" size="icon" asChild>
+            <Link to="/">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          </Button>
+          <span className="text-sm font-medium truncate flex-1 min-w-0">
+            {displayName} ({anime.mode === "dub" ? "Dub" : "Sub"})
+          </span>
+        </div>
 
-      <div className="flex gap-6">
-        {details?.thumbnail ? (
-          <img
-            src={details.thumbnail}
-            alt=""
-            className="w-32 sm:w-40 aspect-[2/3] object-cover rounded-xl border-2 border-border shrink-0"
-          />
-        ) : (
-          <div className="w-32 sm:w-40 aspect-[2/3] rounded-xl border-2 border-border bg-muted shrink-0 flex items-center justify-center text-muted-foreground text-xs">
-            No image
+        <div className="container flex flex-col gap-6 p-6 md:p-8 max-w-3xl mx-auto">
+          <div className="flex gap-6">
+            {details?.thumbnail ? (
+              <img
+                src={details.thumbnail}
+                alt=""
+                className="w-32 sm:w-40 aspect-[2/3] object-cover rounded-xl border-2 border-border shrink-0"
+              />
+            ) : (
+              <div className="w-32 sm:w-40 aspect-[2/3] rounded-xl border-2 border-border bg-muted shrink-0 flex items-center justify-center text-muted-foreground text-xs">
+                No image
+              </div>
+            )}
+            <div className="flex flex-col gap-2 min-w-0 flex-1">
+              <p className="text-sm text-muted-foreground">
+                {details?.type ?? "TV"} · {anime?.episodeCount ?? episodes.length} episodes ({mode})
+              </p>
+              {details?.description && (
+                <p className="text-sm text-foreground/90 line-clamp-6">{details.description}</p>
+              )}
+            </div>
           </div>
-        )}
-        <div className="flex flex-col gap-2 min-w-0 flex-1">
-          <p className="text-sm text-muted-foreground">
-            {details?.type ?? "TV"} · {anime?.episodeCount ?? episodes.length} episodes ({mode})
-          </p>
-          {details?.description && (
-            <p className="text-sm text-foreground/90 line-clamp-6">{details.description}</p>
-          )}
+
+          <section className="flex flex-col gap-3">
+            <h2 className="text-lg font-semibold">Episodes</h2>
+            {episodesState.status === "loading" && (
+              <p className="text-sm text-muted-foreground">Loading episodes…</p>
+            )}
+            {episodesState.status === "error" && (
+              <p className="text-sm text-destructive">{episodesState.message}</p>
+            )}
+            {episodes.length > 0 && (
+              <ul className="flex flex-wrap gap-2">
+                {episodes.map((ep) => {
+                  const isPlaying = playingEpisode === ep;
+                  return (
+                    <li key={ep}>
+                      <button
+                        type="button"
+                        onClick={() => playEpisode(ep, episodes)}
+                        disabled={isPlaying}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1.5 text-xs font-medium hover:bg-muted/80 transition-colors disabled:opacity-50"
+                      >
+                        <Play className="h-3 w-3 shrink-0" />
+                        {isPlaying ? "Resolving…" : ep}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
         </div>
       </div>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">Episodes</h2>
-        {episodesState.status === "loading" && (
-          <p className="text-sm text-muted-foreground">Loading episodes…</p>
-        )}
-        {episodesState.status === "error" && (
-          <p className="text-sm text-destructive">{episodesState.message}</p>
-        )}
-        {episodes.length > 0 && (
-          <ul className="flex flex-wrap gap-2">
-            {episodes.map((ep) => {
-              const isPlaying = playingEpisode === ep;
-              return (
-                <li key={ep}>
-                  <button
-                    type="button"
-                    onClick={() => playEpisode(ep, episodes)}
-                    disabled={isPlaying}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1.5 text-xs font-medium hover:bg-muted/80 transition-colors disabled:opacity-50"
-                  >
-                    <Play className="h-3 w-3 shrink-0" />
-                    {isPlaying ? "Resolving…" : ep}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-    </div>
+    </>
   );
 }

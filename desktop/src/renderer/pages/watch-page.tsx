@@ -1,3 +1,7 @@
+import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+
 import { Button } from "@/renderer/components/ui/button";
 import {
   Select,
@@ -8,9 +12,6 @@ import {
 } from "@/renderer/components/ui/select";
 import { type ShowDetails, getAniCli } from "@/renderer/lib/ani-cli-bridge";
 import { getRecentlyWatched } from "@/renderer/lib/recently-watched-bridge";
-import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
 
 /** How many automatic reconnects after a playback error before showing the manual overlay. */
 const MAX_AUTO_RECONNECT = 5;
@@ -175,8 +176,7 @@ export function WatchPage() {
 
   const handleVideoError = useCallback(() => {
     const el = videoRef.current;
-    const t =
-      el && !Number.isNaN(el.currentTime) && el.currentTime > 0 ? el.currentTime : 0;
+    const t = el && !Number.isNaN(el.currentTime) && el.currentTime > 0 ? el.currentTime : 0;
     lastPlaybackTimeRef.current = t > 0 ? t : lastPlaybackTimeRef.current;
 
     const ep = currentEpisode;
@@ -185,8 +185,7 @@ export function WatchPage() {
     const n = autoReconnectAttemptRef.current;
 
     if (n <= MAX_AUTO_RECONNECT) {
-      const delayMs =
-        n === 1 ? 0 : Math.min(1000 * 2 ** (n - 2), 8000);
+      const delayMs = n === 1 ? 0 : Math.min(1000 * 2 ** (n - 2), 8000);
       clearReconnectTimeout();
       setPlayUrl("");
       setPlaybackError(null);
@@ -243,7 +242,7 @@ export function WatchPage() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-border shrink-0">
+      <div className="sticky top-12 z-10 flex items-center gap-3 px-4 py-2 border-b border-border shrink-0 bg-background">
         <Button variant="ghost" size="icon" asChild>
           <Link to="/">
             <ArrowLeft className="h-5 w-5" />
@@ -270,7 +269,7 @@ export function WatchPage() {
       </div>
 
       {/* Video player - fixed 16:9 area, centered */}
-      <div className="w-full flex items-center justify-center shrink-0 p-16">
+      <div className="w-full flex items-center justify-center shrink-0 p-8">
         <div className="w-full max-w-5xl px-4">
           <div className="relative w-full aspect-video bg-black rounded-md overflow-hidden flex items-center justify-center">
             {loadingEpisode && !playUrl ? (
