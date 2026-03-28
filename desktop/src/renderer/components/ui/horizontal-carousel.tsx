@@ -94,33 +94,6 @@ export function HorizontalCarousel({ items, pageSize = 6 }: HorizontalCarouselPr
     [pageSize]
   );
 
-  const handleWheel = useCallback(
-    (e: WheelEvent) => {
-      const el = scrollRef.current;
-      if (!el || items.length === 0) return;
-      const deltaY = e.deltaY;
-      if (deltaY === 0) return;
-      const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth);
-      const canGoRight = el.scrollLeft < maxScrollLeft - 1;
-      const canGoLeft = el.scrollLeft > 0;
-      if (deltaY > 0 && canGoRight) {
-        e.preventDefault();
-        scrollByPage("right");
-      } else if (deltaY < 0 && canGoLeft) {
-        e.preventDefault();
-        scrollByPage("left");
-      }
-    },
-    [items.length, scrollByPage]
-  );
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.addEventListener("wheel", handleWheel, { passive: false });
-    return () => el.removeEventListener("wheel", handleWheel);
-  }, [handleWheel]);
-
   useEffect(() => {
     updateScrollState();
     window.addEventListener("resize", updateScrollState);
