@@ -6,6 +6,7 @@ export interface RecentlyWatchedEntry {
   animeId: string;
   episode: string;
   mode: "sub" | "dub";
+  timestamp?: number;
 }
 
 export interface RecentlyWatchedContext {
