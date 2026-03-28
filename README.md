@@ -21,7 +21,9 @@ Experience [pystardust/ani-cli](https://github.com/pystardust/ani-cli) as a easy
 
 ## Installation
 
-### Windows
+### Windows (Experimental)
+
+[![Windows - Download](https://img.shields.io/badge/Windows-download-blue)](https://github.com/wuon/openanime/releases/download/v0.0.3-alpha/Openanime-0.0.3-alpha.Setup.exe)
 
 Since the underlying tool relies on git bash, you will need to install git.
 
@@ -46,6 +48,13 @@ xattr -cr /Applications/Openanime.app
 **Why do I need to do this?**
 
 When you download an app from outside the App Store, macOS attaches a com.apple.quarantine attribute to it. If the app isn't digitally signed correctly, Gatekeeper may block it. Running xattr -cr on the application folder wipes those security flags, essentially "tricking" macOS into thinking the file was created locally rather than downloaded, allowing it to run.
+
+### Linux (Experimental)
+
+[![.rpm - Download](https://img.shields.io/badge/.rpm-download-blue)](https://github.com/wuon/openanime/releases/download/v0.0.3-alpha/Openanime-0.0.3.alpha-1.x86_64.rpm)
+[![.deb - Download](https://img.shields.io/badge/.deb-download-blue)](https://github.com/wuon/openanime/releases/download/v0.0.3-alpha/openanime_0.0.3.alpha_amd64.deb)
+
+Unfortunately I haven't had time to optimize for Linux. Please let me know if anything is broken by [reporting an issue](https://github.com/wuon/openanime/issues)!
 
 ## License
 
