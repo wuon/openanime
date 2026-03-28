@@ -13,6 +13,8 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     icon: "./public/icon",
+    // Must match `package.json` `name` — MakerDeb looks up the binary by that name.
+    // If this differs (e.g. "openanime"), the .deb step fails on Linux CI.
     executableName: "Openanime",
     /**
      * Ship external helper binaries/scripts alongside the app so the main
