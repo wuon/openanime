@@ -1,2 +1,1 @@
-export const EXTERNAL_OPEN_GITHUB_CHANNEL = "external:open-github";
-
+export const EXTERNAL_OPEN_URL_CHANNEL = "external:open-url";

@@ -21,9 +21,21 @@ Experience [pystardust/ani-cli](https://github.com/pystardust/ani-cli) as a easy
 
 ## Installation
 
+### Windows
+
+Since the underlying tool relies on git bash, you will need to install git.
+
+Using winget tool
+
+```
+winget install --id Git.Git -e --source winget
+```
+
+Or manually from https://git-scm.com/install/windows
+
 ### OSX
 
-[![OSX - Download](https://img.shields.io/badge/OSX-download-blue)](https://github.com/wuon/openanime/releases/download/v0.0.2-alpha/Openanime-darwin-arm64-0.0.2-alpha.zip)
+[![OSX - Download](https://img.shields.io/badge/OSX-download-blue)](https://github.com/wuon/openanime/releases/download/v0.0.3-alpha/Openanime-darwin-arm64-0.0.3-alpha.zip)
 
 Since the application is not signed or notarized, you will have to perform this command via terminal
 

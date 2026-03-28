@@ -4,7 +4,20 @@
  */
 import { spawn } from "child_process";
 import { app } from "electron";
+import fs from "fs";
 import path from "path";
+
+/** Bash paths ani-cli tries on Windows; also used for startup Git availability checks. */
+export const WINDOWS_GIT_BASH_PATHS = [
+  "C:\\Program Files\\Git\\bin\\bash.exe",
+  "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+  "C:\\msys64\\usr\\bin\\bash.exe",
+] as const;
+
+export function isWindowsGitBashAvailable(): boolean {
+  if (process.platform !== "win32") return true;
+  return WINDOWS_GIT_BASH_PATHS.some((p) => fs.existsSync(p));
+}
 
 const DEFAULT_REFERER = "https://allmanga.to";
 
@@ -76,11 +89,7 @@ function runAniCliForStream(
   }
 
   if (process.platform === "win32") {
-    shellCandidates.push(
-      "C:\\Program Files\\Git\\bin\\bash.exe",
-      "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
-      "C:\\msys64\\usr\\bin\\bash.exe"
-    );
+    shellCandidates.push(...WINDOWS_GIT_BASH_PATHS);
   }
 
   return new Promise((resolve) => {

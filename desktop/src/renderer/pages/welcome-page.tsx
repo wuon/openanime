@@ -40,12 +40,11 @@ export function WelcomePage() {
   >({});
 
   const openAniCliRepo = useCallback(() => {
-    const w = window as Window & { urlOpener?: { openGithub?: (url: string) => Promise<void> } };
-    if (typeof w.urlOpener?.openGithub === "function") {
-      void w.urlOpener.openGithub("https://github.com/pystardust/ani-cli");
+    const url = "https://github.com/pystardust/ani-cli";
+    if (window.urlOpener) {
+      void window.urlOpener.openUrl(url);
     } else {
-      // Fallback for environments where the preload context isn't available
-      window.open("https://github.com/pystardust/ani-cli", "_blank", "noopener,noreferrer");
+      window.open(url, "_blank", "noopener,noreferrer");
     }
   }, []);
 

@@ -20,10 +20,13 @@ interface StreamUrlResult {
 
 interface AppContext {
   version: () => Promise<string>;
+  os: () => Promise<string>;
+  /** True when required system dependencies are missing (e.g. Git Bash on Windows). */
+  dependenciesRequired: () => Promise<boolean>;
 }
 
 export interface UrlOpenerContext {
-  openGithub: (url: string) => Promise<void>;
+  openUrl: (url: string) => Promise<void>;
 }
 
 interface AniCliContext {

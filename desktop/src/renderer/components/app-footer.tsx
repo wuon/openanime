@@ -23,7 +23,7 @@ export function AppFooter() {
 
   return (
     <footer className="w-full mt-auto pb-4">
-      <div className="container mx-auto px-4 py-3">
+      <div className="container mx-auto px-4 py-2">
         <p className="text-center text-xs text-muted-foreground">
           made with ❤️ + 🍵
           {version && <> · v{version}</>}

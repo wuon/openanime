@@ -1,3 +1,4 @@
+import { DependenciesRequiredDialog } from "@/renderer/components/dependencies-required-dialog";
 import { initI18n } from "@/renderer/helpers/i18n/i18n";
 import { updateAppLanguage } from "@/renderer/helpers/i18n/language-helpers";
 import { syncThemeWithLocal } from "@/renderer/helpers/theme/theme-helper";
@@ -22,6 +23,7 @@ export default function App() {
 
   return (
     <HashRouter>
+      <DependenciesRequiredDialog />
       <Routes>
         <Route element={<BaseLayout />}>
           <Route path="/" element={<WelcomePage />} />

@@ -1,9 +1,20 @@
 import { app, ipcMain } from "electron";
+import { platform as nodePlatform } from "node:os";
 
-import { APP_OS_CHANNEL, APP_VERSION_CHANNEL } from "./app-channels";
+import { isWindowsGitBashAvailable } from "../ani-cli/ani-cli-stream";
+import {
+  APP_DEPENDENCIES_REQUIRED_CHANNEL,
+  APP_OS_CHANNEL,
+  APP_VERSION_CHANNEL,
+} from "./app-channels";
+
+function areDependenciesMissing(): boolean {
+  if (process.platform !== "win32") return false;
+  return !isWindowsGitBashAvailable();
+}
 
 export function addAppEventListeners() {
   ipcMain.handle(APP_VERSION_CHANNEL, () => app.getVersion());
-  ipcMain.handle(APP_OS_CHANNEL, () => process.platform);
+  ipcMain.handle(APP_OS_CHANNEL, () => nodePlatform());
+  ipcMain.handle(APP_DEPENDENCIES_REQUIRED_CHANNEL, () => areDependenciesMissing());
 }
-
