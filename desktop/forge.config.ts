@@ -22,7 +22,7 @@ const config: ForgeConfig = {
      * - Other platforms: ani-cli + fzf (+ ffmpeg if present)
      */
     extraResource: isWindows
-      ? ["bin/ani-cli", "bin/fzf.exe", "bin/ffmpeg"]
+      ? ["bin/ani-cli", "bin/fzf.exe", "bin/ffmpeg.exe"]
       : ["bin/ani-cli", "bin/fzf", "bin/ffmpeg"],
   },
   rebuildConfig: {},

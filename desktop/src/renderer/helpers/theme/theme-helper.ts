@@ -48,7 +48,8 @@ export async function toggleTheme() {
 export async function syncThemeWithLocal() {
   const { local } = await getCurrentTheme();
   if (!local) {
-    await setTheme("system");
+    // Default theme for first-time users.
+    await setTheme("dark");
     return;
   }
 
