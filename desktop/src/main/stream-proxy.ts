@@ -5,6 +5,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import http from "http";
 import { Readable } from "stream";
+import { pipeline } from "stream/promises";
 import { URL } from "url";
 
 const DEFAULT_REFERER = "https://allmanga.to";
@@ -59,8 +60,13 @@ function handleStreamRequest(req: IncomingMessage, res: ServerResponse): void {
   };
   if (range) headers.Range = range;
 
-  fetch(targetUrl, { headers })
-    .then((fetchRes) => {
+  const ac = new AbortController();
+  const onClientGone = () => ac.abort();
+  req.once("aborted", onClientGone);
+  res.once("close", onClientGone);
+
+  fetch(targetUrl, { headers, signal: ac.signal })
+    .then(async (fetchRes) => {
       const status = fetchRes.status;
       const resHeaders: Record<string, string> = {};
       fetchRes.headers.forEach((v, k) => {
@@ -71,14 +77,46 @@ function handleStreamRequest(req: IncomingMessage, res: ServerResponse): void {
       });
       res.writeHead(status === 206 ? 206 : status, resHeaders);
       const body = fetchRes.body;
-      if (body) {
-        Readable.fromWeb(body as Parameters<typeof Readable.fromWeb>[0]).pipe(res);
-      } else {
+      if (!body) {
         res.end();
+        return;
+      }
+      const nodeStream = Readable.fromWeb(body as Parameters<typeof Readable.fromWeb>[0]);
+      try {
+        await pipeline(nodeStream, res);
+      } catch (err: unknown) {
+        // Client closed (seek, buffer trim, new Range) or upstream ended early — not fatal.
+        if (isBenignStreamError(err)) return;
+        if (!res.headersSent) {
+          res.writeHead(502);
+          res.end(String(err instanceof Error ? err.message : "Proxy error"));
+        } else if (!res.writableEnded) {
+          res.destroy();
+        }
       }
     })
     .catch((err: unknown) => {
-      res.writeHead(502);
-      res.end(String(err instanceof Error ? err.message : "Proxy error"));
+      if (ac.signal.aborted || isBenignStreamError(err)) return;
+      if (!res.headersSent) {
+        res.writeHead(502);
+        res.end(String(err instanceof Error ? err.message : "Proxy error"));
+      } else if (!res.writableEnded) {
+        res.destroy();
+      }
     });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isBenignStreamError(err: unknown): boolean {
+  if (!isRecord(err)) return false;
+  const name = typeof err.name === "string" ? err.name : "";
+  const message = typeof err.message === "string" ? err.message : "";
+  const code = typeof err.code === "string" ? err.code : "";
+  if (name === "AbortError") return true;
+  if (code === "ERR_STREAM_PREMATURE_CLOSE") return true;
+  if (message === "terminated") return true;
+  return false;
 }

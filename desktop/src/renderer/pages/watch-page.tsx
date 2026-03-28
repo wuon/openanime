@@ -8,9 +8,12 @@ import {
 } from "@/renderer/components/ui/select";
 import { type ShowDetails, getAniCli } from "@/renderer/lib/ani-cli-bridge";
 import { getRecentlyWatched } from "@/renderer/lib/recently-watched-bridge";
-import { ArrowLeft, Loader2 } from "lucide-react";
-import React, { useCallback, useEffect, useState } from "react";
+import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+
+/** How many automatic reconnects after a playback error before showing the manual overlay. */
+const MAX_AUTO_RECONNECT = 5;
 
 interface WatchState {
   anime: { id: string; name: string; mode: "sub" | "dub" };
@@ -25,8 +28,11 @@ export function WatchPage() {
   const state = location.state as WatchState | null;
 
   const [playUrl, setPlayUrl] = useState<string>("");
+  /** Bumps when a new stream URL is ready so the <video> remounts (retry after errors). */
+  const [streamRevision, setStreamRevision] = useState(0);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [details, setDetails] = useState<ShowDetails | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [loadingEpisode, setLoadingEpisode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const anime = state?.anime;
@@ -35,17 +41,40 @@ export function WatchPage() {
 
   const [currentEpisode, setCurrentEpisode] = useState<string>(initialEpisode);
 
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  /** Seconds to seek to after the next successful load (set before reload). */
+  const resumeAfterLoadRef = useRef<number | null>(null);
+  /** Last known position when playback failed (for manual retry after overlay). */
+  const lastPlaybackTimeRef = useRef<number | null>(null);
+  const autoReconnectAttemptRef = useRef(0);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearReconnectTimeout = useCallback(() => {
+    if (reconnectTimeoutRef.current != null) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+  }, []);
+
   const loadStream = useCallback(
-    async (ep: string) => {
+    async (ep: string, opts?: { resumeFrom?: number | null }) => {
       if (!anime?.id || !ep) return;
+      clearReconnectTimeout();
+      if (opts?.resumeFrom != null && opts.resumeFrom > 0) {
+        resumeAfterLoadRef.current = opts.resumeFrom;
+      } else {
+        resumeAfterLoadRef.current = null;
+      }
       setLoadingEpisode(true);
       setError(null);
+      setPlaybackError(null);
       try {
         const aniCli = getAniCli();
         const { url, referer } = await aniCli.getStreamUrl(anime.id, ep, anime.mode);
         const base = await aniCli.getStreamProxyBaseUrl();
         const urlWithProxy = `${base}/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
         setPlayUrl(urlWithProxy);
+        setStreamRevision((r) => r + 1);
         setCurrentEpisode(ep);
         try {
           await getRecentlyWatched().record(anime.id, ep, anime.mode);
@@ -58,8 +87,14 @@ export function WatchPage() {
         setLoadingEpisode(false);
       }
     },
-    [anime]
+    [anime, clearReconnectTimeout]
   );
+
+  useEffect(() => {
+    return () => {
+      clearReconnectTimeout();
+    };
+  }, [clearReconnectTimeout]);
 
   useEffect(() => {
     if (!state?.anime) {
@@ -124,6 +159,73 @@ export function WatchPage() {
     [loadStream]
   );
 
+  const retryStream = useCallback(() => {
+    if (!currentEpisode) return;
+    clearReconnectTimeout();
+    autoReconnectAttemptRef.current = 0;
+    const el = videoRef.current;
+    const fromVideo =
+      el && !Number.isNaN(el.currentTime) && el.currentTime > 0 ? el.currentTime : null;
+    const resumeFrom = fromVideo ?? lastPlaybackTimeRef.current ?? undefined;
+    setPlayUrl("");
+    setPlaybackError(null);
+    setError(null);
+    void loadStream(currentEpisode, resumeFrom != null ? { resumeFrom } : undefined);
+  }, [clearReconnectTimeout, currentEpisode, loadStream]);
+
+  const handleVideoError = useCallback(() => {
+    const el = videoRef.current;
+    const t =
+      el && !Number.isNaN(el.currentTime) && el.currentTime > 0 ? el.currentTime : 0;
+    lastPlaybackTimeRef.current = t > 0 ? t : lastPlaybackTimeRef.current;
+
+    const ep = currentEpisode;
+
+    autoReconnectAttemptRef.current += 1;
+    const n = autoReconnectAttemptRef.current;
+
+    if (n <= MAX_AUTO_RECONNECT) {
+      const delayMs =
+        n === 1 ? 0 : Math.min(1000 * 2 ** (n - 2), 8000);
+      clearReconnectTimeout();
+      setPlayUrl("");
+      setPlaybackError(null);
+      const run = () => {
+        void loadStream(ep, t > 0 ? { resumeFrom: t } : undefined);
+      };
+      if (delayMs === 0) {
+        run();
+      } else {
+        reconnectTimeoutRef.current = setTimeout(() => {
+          reconnectTimeoutRef.current = null;
+          run();
+        }, delayMs);
+      }
+      return;
+    }
+
+    autoReconnectAttemptRef.current = 0;
+    setPlaybackError(
+      "Stream interrupted (e.g. network lost or server error). Reconnect automatically failed; try again or check your connection."
+    );
+  }, [clearReconnectTimeout, currentEpisode, loadStream]);
+
+  const applyResumeIfNeeded = useCallback((video: HTMLVideoElement) => {
+    const resume = resumeAfterLoadRef.current;
+    if (resume == null || resume <= 0 || Number.isNaN(resume)) return;
+    resumeAfterLoadRef.current = null;
+    const dur = video.duration;
+    let target = resume;
+    if (Number.isFinite(dur) && dur > 0) {
+      target = Math.min(resume, Math.max(0, dur - 0.25));
+    }
+    video.currentTime = Math.max(0, target);
+  }, []);
+
+  const handleVideoPlaying = useCallback(() => {
+    autoReconnectAttemptRef.current = 0;
+  }, []);
+
   if (!state?.anime) {
     return (
       <div className="container flex flex-col items-center justify-center gap-4 p-8">
@@ -177,18 +279,51 @@ export function WatchPage() {
                 <span className="text-sm">Loading stream…</span>
               </div>
             ) : error && !playUrl ? (
-              <div className="flex flex-col items-center gap-2 text-destructive px-4 text-center">
+              <div className="flex flex-col items-center gap-3 text-destructive px-4 text-center">
                 <span className="text-sm">{error}</span>
+                <Button type="button" variant="secondary" size="sm" onClick={retryStream}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Retry
+                </Button>
               </div>
             ) : playUrl ? (
-              <video
-                key={playUrl}
-                className="h-full w-full object-contain bg-black"
-                controls
-                autoPlay
-                playsInline
-                src={playUrl}
-              />
+              <div className="relative h-full w-full">
+                <video
+                  ref={videoRef}
+                  key={streamRevision}
+                  className="h-full w-full object-contain bg-black"
+                  controls
+                  autoPlay
+                  playsInline
+                  src={playUrl}
+                  onLoadedMetadata={(e) => {
+                    applyResumeIfNeeded(e.currentTarget);
+                  }}
+                  onPlaying={handleVideoPlaying}
+                  onError={handleVideoError}
+                />
+                {playbackError ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/85 px-4 text-center">
+                    <p className="text-sm text-white/90 max-w-md">{playbackError}</p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={loadingEpisode}
+                      onClick={retryStream}
+                    >
+                      {loadingEpisode ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Reload stream
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
             ) : (
               <div className="flex flex-col items-center gap-2 text-muted-foreground px-4 text-center">
                 <span className="text-sm">Select an episode to play</span>
