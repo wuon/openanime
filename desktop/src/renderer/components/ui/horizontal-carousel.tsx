@@ -42,6 +42,7 @@ function HorizontalCarouselCard({ item }: { item: HorizontalCarouselItem }) {
               src={item.coverUrl ?? undefined}
               alt=""
               loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover"
               onError={() => setFailed(true)}
             />

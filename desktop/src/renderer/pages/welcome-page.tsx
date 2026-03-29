@@ -1,5 +1,5 @@
 import { Search, Trash2 } from "lucide-react";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import LogoRoundedSquareLight from "@/renderer/assets/logo-rounded-square-light.svg";
@@ -8,14 +8,11 @@ import { Button } from "@/renderer/components/ui/button";
 import { HorizontalCarousel } from "@/renderer/components/ui/horizontal-carousel";
 import { Input } from "@/renderer/components/ui/input";
 import { useDebouncedValue } from "@/renderer/hooks/use-debounced-value";
-import {
-  type AnimeSearchResult as AnimeSearchResultType,
-  getAniCli,
-} from "@/renderer/lib/ani-cli-bridge";
-import {
-  type RecentlyWatchedEntry,
-  getRecentlyWatched,
-} from "@/renderer/lib/recently-watched-bridge";
+import { useWelcomeRecentlyWatched } from "@/renderer/hooks/use-welcome-recently-watched";
+import { useWelcomeRecentUploads } from "@/renderer/hooks/use-welcome-recent-uploads";
+import { useWelcomeSearch } from "@/renderer/hooks/use-welcome-search";
+import { type AnimeSearchResult as AnimeSearchResultType } from "@/renderer/lib/ani-cli-bridge";
+import { type RecentlyWatchedEntry } from "@/renderer/lib/recently-watched-bridge";
 
 const SEARCH_DEBOUNCE_MS = 500;
 const RECENT_PAGE_SIZE = 12;
@@ -24,20 +21,16 @@ export function WelcomePage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
-  const [results, setResults] = useState<AnimeSearchResultType[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [searchThumbnails, setSearchThumbnails] = useState<Record<string, string | null>>({});
 
-  const [recentAnime, setRecentAnime] = useState<AnimeSearchResultType[]>([]);
-  const [recentLoading, setRecentLoading] = useState(true);
-  const [recentThumbnails, setRecentThumbnails] = useState<Record<string, string | null>>({});
-
-  const [recentlyWatched, setRecentlyWatched] = useState<RecentlyWatchedEntry[]>([]);
-  const [recentlyWatchedLoading, setRecentlyWatchedLoading] = useState(true);
-  const [recentlyWatchedDetails, setRecentlyWatchedDetails] = useState<
-    Record<string, { name: string; thumbnail: string | null }>
-  >({});
+  const { results, loading, error, searchThumbnails } = useWelcomeSearch(debouncedQuery);
+  const { recentAnime, recentLoading, recentThumbnails } =
+    useWelcomeRecentUploads(RECENT_PAGE_SIZE);
+  const {
+    recentlyWatched,
+    recentlyWatchedLoading,
+    recentlyWatchedDetails,
+    clearRecentlyWatched,
+  } = useWelcomeRecentlyWatched();
 
   const openAniCliRepo = useCallback(() => {
     const url = "https://github.com/pystardust/ani-cli";
@@ -47,168 +40,6 @@ export function WelcomePage() {
       window.open(url, "_blank", "noopener,noreferrer");
     }
   }, []);
-
-  useEffect(() => {
-    const q = debouncedQuery.trim();
-    if (!q) {
-      setResults([]);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setSearchThumbnails({});
-    const aniCli = getAniCli();
-    void aniCli
-      .search(q)
-      .then((list) => {
-        if (!cancelled) setResults(list);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Search failed");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [debouncedQuery]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setRecentLoading(true);
-    /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-    void getAniCli()
-      .getRecent(1, RECENT_PAGE_SIZE)
-      .then(
-        (res: { items: AnimeSearchResultType[]; hasMore: boolean }) => {
-          if (!cancelled) setRecentAnime(res.items);
-        },
-        () => {
-          if (!cancelled) setRecentAnime([]);
-        }
-      )
-      .finally(() => {
-        if (!cancelled) setRecentLoading(false);
-      });
-    /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Fetch recently watched entries
-  useEffect(() => {
-    let cancelled = false;
-    setRecentlyWatchedLoading(true);
-    void getRecentlyWatched()
-      .read()
-      .then((entries) => {
-        if (!cancelled) setRecentlyWatched(entries);
-      })
-      .finally(() => {
-        if (!cancelled) setRecentlyWatchedLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Fetch details (name + thumbnail) for recently watched (by animeId)
-  useEffect(() => {
-    let cancelled = false;
-    if (recentlyWatched.length === 0) return;
-    const aniCli = getAniCli();
-    const seen = new Set<string>();
-    for (const entry of recentlyWatched) {
-      if (seen.has(entry.animeId)) continue;
-      seen.add(entry.animeId);
-      if (recentlyWatchedDetails[entry.animeId] !== undefined) continue;
-      void (async () => {
-        try {
-          const details = await aniCli.getShowDetails(entry.animeId);
-          if (cancelled) return;
-          setRecentlyWatchedDetails((prev) =>
-            prev[entry.animeId] !== undefined
-              ? prev
-              : {
-                  ...prev,
-                  [entry.animeId]: { name: details.name, thumbnail: details.thumbnail ?? null },
-                }
-          );
-        } catch {
-          if (cancelled) return;
-          setRecentlyWatchedDetails((prev) =>
-            prev[entry.animeId] !== undefined
-              ? prev
-              : { ...prev, [entry.animeId]: { name: entry.animeId, thumbnail: null } }
-          );
-        }
-      })();
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [recentlyWatched]);
-
-  // Fetch thumbnails for recently uploaded shows (used in the carousel)
-  /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
-  useEffect(() => {
-    let cancelled = false;
-    if (recentAnime.length === 0) return;
-    const aniCli = getAniCli();
-    for (const anime of recentAnime) {
-      if (recentThumbnails[anime.id] !== undefined) continue;
-      void (async () => {
-        try {
-          const details = await aniCli.getShowDetails(anime.id);
-          if (cancelled) return;
-          setRecentThumbnails((prev) =>
-            prev[anime.id] !== undefined ? prev : { ...prev, [anime.id]: details.thumbnail ?? null }
-          );
-        } catch {
-          if (cancelled) return;
-          setRecentThumbnails((prev) =>
-            prev[anime.id] !== undefined ? prev : { ...prev, [anime.id]: null }
-          );
-        }
-      })();
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [recentAnime]);
-  /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
-
-  // Fetch thumbnails for search results (used in the carousel)
-  useEffect(() => {
-    let cancelled = false;
-    if (results.length === 0) return;
-    const aniCli = getAniCli();
-    for (const anime of results) {
-      if (searchThumbnails[anime.id] !== undefined) continue;
-      void (async () => {
-        try {
-          const details = await aniCli.getShowDetails(anime.id);
-          if (cancelled) return;
-          setSearchThumbnails((prev) =>
-            prev[anime.id] !== undefined ? prev : { ...prev, [anime.id]: details.thumbnail ?? null }
-          );
-        } catch {
-          if (cancelled) return;
-          setSearchThumbnails((prev) =>
-            prev[anime.id] !== undefined ? prev : { ...prev, [anime.id]: null }
-          );
-        }
-      })();
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [results]);
 
   const openSearchResult = useCallback(
     (anime: AnimeSearchResultType) => {
@@ -246,12 +77,6 @@ export function WelcomePage() {
     },
     [navigate, recentlyWatchedDetails]
   );
-
-  const clearRecentlyWatched = useCallback(async () => {
-    await getRecentlyWatched().clear();
-    setRecentlyWatched([]);
-    setRecentlyWatchedDetails({});
-  }, []);
 
   return (
     <div className="container flex flex-col gap-6 p-6 md:p-8 max-w-5xl mx-auto">
