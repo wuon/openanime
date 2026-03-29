@@ -1,4 +1,10 @@
+import React, { useEffect } from "react";
+import { createRoot } from "react-dom/client";
+import { useTranslation } from "react-i18next";
+import { HashRouter, Route, Routes } from "react-router-dom";
+
 import { DependenciesRequiredDialog } from "@/renderer/components/dependencies-required-dialog";
+import { UpdateAvailableDialog } from "@/renderer/components/update-available-dialog";
 import { initI18n } from "@/renderer/helpers/i18n/i18n";
 import { updateAppLanguage } from "@/renderer/helpers/i18n/language-helpers";
 import { syncThemeWithLocal } from "@/renderer/helpers/theme/theme-helper";
@@ -8,10 +14,6 @@ import { AnimeSearchPage } from "@/renderer/pages/anime-search-page";
 import { PlayerPage } from "@/renderer/pages/player-page";
 import { WatchPage } from "@/renderer/pages/watch-page";
 import { WelcomePage } from "@/renderer/pages/welcome-page";
-import React, { useEffect } from "react";
-import { createRoot } from "react-dom/client";
-import { useTranslation } from "react-i18next";
-import { HashRouter, Route, Routes } from "react-router-dom";
 
 export default function App() {
   const { i18n } = useTranslation();
@@ -24,6 +26,7 @@ export default function App() {
   return (
     <HashRouter>
       <DependenciesRequiredDialog />
+      <UpdateAvailableDialog />
       <Routes>
         <Route element={<BaseLayout />}>
           <Route path="/" element={<WelcomePage />} />

@@ -20,7 +20,7 @@ const WINGET_INSTALL_CMD = "winget install --id Git.Git -e --source winget";
  * install instructions (aligned with the project README).
  */
 export function DependenciesRequiredDialog() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [wingetCopied, setWingetCopied] = useState(false);
 
   const copyWingetCommand = useCallback(async () => {

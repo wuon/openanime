@@ -1,3 +1,5 @@
+import { AppUpdateCheckResult } from "./app-update-types";
+
 interface ThemeContext {
   toggle: () => Promise<boolean>;
   dark: () => Promise<void>;
@@ -23,6 +25,7 @@ interface AppContext {
   os: () => Promise<string>;
   /** True when required system dependencies are missing (e.g. Git Bash on Windows). */
   dependenciesRequired: () => Promise<boolean>;
+  checkForUpdate: () => Promise<AppUpdateCheckResult>;
 }
 
 export interface UrlOpenerContext {
