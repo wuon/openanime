@@ -7,8 +7,6 @@ import { VitePlugin } from "@electron-forge/plugin-vite";
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
 
-const isWindows = process.platform === "win32";
-
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
@@ -16,16 +14,6 @@ const config: ForgeConfig = {
     // Must match `package.json` `name` — MakerDeb looks up the binary by that name.
     // If this differs (e.g. "openanime"), the .deb step fails on Linux CI.
     executableName: "Openanime",
-    /**
-     * Ship external helper binaries/scripts alongside the app so the main
-     * process can execute them even when running from a packaged build.
-     *
-     * - Windows: ani-cli + fzf.exe (+ ffmpeg if present)
-     * - Other platforms: ani-cli + fzf (+ ffmpeg if present)
-     */
-    extraResource: isWindows
-      ? ["bin/ani-cli", "bin/fzf.exe", "bin/ffmpeg.exe"]
-      : ["bin/ani-cli", "bin/fzf", "bin/ffmpeg"],
   },
   rebuildConfig: {},
   makers: [new MakerSquirrel({}), new MakerZIP({}, ["darwin"]), new MakerRpm({}), new MakerDeb({})],

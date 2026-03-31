@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import { useTranslation } from "react-i18next";
 import { HashRouter, Route, Routes } from "react-router-dom";
 
-import { DependenciesRequiredDialog } from "@/renderer/components/dependencies-required-dialog";
 import { UpdateAvailableDialog } from "@/renderer/components/update-available-dialog";
 import { initI18n } from "@/renderer/helpers/i18n/i18n";
 import { updateAppLanguage } from "@/renderer/helpers/i18n/language-helpers";
@@ -25,7 +24,6 @@ export default function App() {
 
   return (
     <HashRouter>
-      <DependenciesRequiredDialog />
       <UpdateAvailableDialog />
       <Routes>
         <Route element={<BaseLayout />}>

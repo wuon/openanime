@@ -8,7 +8,6 @@ import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import { URL } from "url";
 
-const DEFAULT_REFERER = "https://allmanga.to";
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0";
 
@@ -45,7 +44,7 @@ function handleStreamRequest(req: IncomingMessage, res: ServerResponse): void {
 
   const parsed = new URL(req.url ?? "", `http://127.0.0.1`);
   const targetUrl = parsed.searchParams.get("url");
-  const referer = parsed.searchParams.get("referer") ?? DEFAULT_REFERER;
+  const referer = parsed.searchParams.get("referer");
 
   if (!targetUrl) {
     res.writeHead(400);
@@ -55,9 +54,11 @@ function handleStreamRequest(req: IncomingMessage, res: ServerResponse): void {
 
   const range = req.headers.range;
   const headers: Record<string, string> = {
-    Referer: referer,
     "User-Agent": USER_AGENT,
   };
+  if (referer && referer.trim().length > 0) {
+    headers.Referer = referer;
+  }
   if (range) headers.Range = range;
 
   const ac = new AbortController();

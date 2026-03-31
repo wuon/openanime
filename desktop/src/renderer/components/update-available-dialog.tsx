@@ -21,16 +21,13 @@ export function UpdateAvailableDialog() {
   const [releaseUrl, setReleaseUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    void window.app.dependenciesRequired().then((required) => {
-      if (required) return;
-      void window.app.checkForUpdate().then((result) => {
-        if (result.updateAvailable && result.releaseUrl && result.latestVersion) {
-          setLatestVersion(result.latestVersion);
-          setCurrentVersion(result.currentVersion);
-          setReleaseUrl(result.releaseUrl);
-          setOpen(true);
-        }
-      });
+    void window.app.checkForUpdate().then((result) => {
+      if (result.updateAvailable && result.releaseUrl && result.latestVersion) {
+        setLatestVersion(result.latestVersion);
+        setCurrentVersion(result.currentVersion);
+        setReleaseUrl(result.releaseUrl);
+        setOpen(true);
+      }
     });
   }, []);
 
