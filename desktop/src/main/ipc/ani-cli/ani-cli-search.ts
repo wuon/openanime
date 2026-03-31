@@ -16,6 +16,8 @@ export interface AnimeSearchResult {
   episodeCount: number;
   /** "sub" | "dub" - which mode was used for episode count */
   mode: "sub" | "dub";
+  hasSub?: boolean;
+  hasDub?: boolean;
 }
 
 interface GqlShowEdge {
@@ -41,6 +43,10 @@ function getEpisodeCount(edge: GqlShowEdge, mode: "sub" | "dub"): number {
   if (Array.isArray(ep)) return ep.length;
   if (typeof ep === "number") return ep;
   return 0;
+}
+
+function hasEpisodes(edge: GqlShowEdge, mode: "sub" | "dub"): boolean {
+  return getEpisodeCount(edge, mode) > 0;
 }
 
 export async function searchAnime(
@@ -86,6 +92,8 @@ export async function searchAnime(
       name: (edge.name ?? "").replace(/\\"/g, '"'),
       episodeCount: getEpisodeCount(edge, mode),
       mode,
+      hasSub: hasEpisodes(edge, "sub"),
+      hasDub: hasEpisodes(edge, "dub"),
     }))
     .filter((r) => r.episodeCount > 0);
 }
@@ -136,6 +144,8 @@ export async function getRecentAnime(
       name: (edge.name ?? "").replace(/\\"/g, '"'),
       episodeCount: getEpisodeCount(edge, mode),
       mode,
+      hasSub: hasEpisodes(edge, "sub"),
+      hasDub: hasEpisodes(edge, "dub"),
     }))
     .filter((r) => r.episodeCount > 0);
 

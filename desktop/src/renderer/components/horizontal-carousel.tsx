@@ -30,6 +30,7 @@ function HorizontalCarouselCard({ item }: { item: HorizontalCarouselItem }) {
       className="group flex-shrink-0 w-36 sm:w-40 text-left focus-visible:outline-none"
       data-carousel-item
       onClick={item.onClick}
+      onDragStart={(event) => event.preventDefault()}
     >
       <div className="relative w-full aspect-[2/3] rounded-2xl border-2 border-border transition-all p-[3px] box-border group-hover:border-primary/80 group-hover:shadow-[0_0_0_1px_rgba(129,140,248,0.7)] group-focus-visible:border-primary/80 group-focus-visible:shadow-[0_0_0_1px_rgba(129,140,248,0.7)]">
         <div className="h-full w-full rounded-xl overflow-hidden bg-muted">
@@ -44,6 +45,7 @@ function HorizontalCarouselCard({ item }: { item: HorizontalCarouselItem }) {
               loading="lazy"
               decoding="async"
               className="h-full w-full object-cover"
+              draggable={false}
               onError={() => setFailed(true)}
             />
           )}

@@ -1,8 +1,9 @@
-import { ArrowLeft, Loader2, Play } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { Button } from "@/renderer/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/renderer/components/ui/tabs";
 import { type AnimeSearchResult, type ShowDetails, getAniCli } from "@/renderer/lib/ani-cli-bridge";
 
 type EpisodesState =
@@ -15,6 +16,10 @@ interface LocationState {
   anime?: AnimeSearchResult;
 }
 
+type AnimeMode = "sub" | "dub";
+
+const MODES: AnimeMode[] = ["sub", "dub"];
+
 export function AnimeDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -22,14 +27,21 @@ export function AnimeDetailsPage() {
   const state = location.state as LocationState | null;
 
   const [details, setDetails] = useState<ShowDetails | null>(null);
-  const [episodesState, setEpisodesState] = useState<EpisodesState>({ status: "idle" });
+  const [episodesByMode, setEpisodesByMode] = useState<Record<AnimeMode, EpisodesState>>({
+    sub: { status: "idle" },
+    dub: { status: "idle" },
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [playingEpisode, setPlayingEpisode] = useState<string | null>(null);
+  const [activeMode, setActiveMode] = useState<AnimeMode>(state?.anime?.mode ?? "sub");
 
   const anime =
     state?.anime ?? (id ? { id, name: "", episodeCount: 0, mode: "sub" as const } : null);
-  const mode = anime?.mode ?? "sub";
+
+  useEffect(() => {
+    setActiveMode(anime?.mode ?? "sub");
+  }, [anime?.id, anime?.mode]);
 
   useEffect(() => {
     if (!id || !anime) {
@@ -40,11 +52,71 @@ export function AnimeDetailsPage() {
     setLoading(true);
     setError(null);
     const aniCli = getAniCli();
-    void Promise.all([aniCli.getShowDetails(id), aniCli.getEpisodes(id, mode)])
-      .then(([d, episodes]) => {
+    setEpisodesByMode({ sub: { status: "loading" }, dub: { status: "loading" } });
+
+    void Promise.allSettled([
+      aniCli.getShowDetails(id),
+      aniCli.getEpisodes(id, "sub"),
+      aniCli.getEpisodes(id, "dub"),
+    ])
+      .then(([detailsResult, subResult, dubResult]) => {
         if (cancelled) return;
-        setDetails(d);
-        setEpisodesState({ status: "loaded", episodes });
+
+        if (detailsResult.status === "fulfilled") {
+          setDetails(detailsResult.value);
+        } else {
+          setError(
+            detailsResult.reason instanceof Error
+              ? detailsResult.reason.message
+              : "Failed to load details"
+          );
+        }
+
+        const nextSubState: EpisodesState =
+          subResult.status === "fulfilled"
+            ? { status: "loaded", episodes: subResult.value }
+            : {
+                status: "error",
+                message:
+                  subResult.reason instanceof Error
+                    ? subResult.reason.message
+                    : "Failed to load sub episodes",
+              };
+
+        const nextDubState: EpisodesState =
+          dubResult.status === "fulfilled"
+            ? { status: "loaded", episodes: dubResult.value }
+            : {
+                status: "error",
+                message:
+                  dubResult.reason instanceof Error
+                    ? dubResult.reason.message
+                    : "Failed to load dub episodes",
+              };
+
+        setEpisodesByMode({ sub: nextSubState, dub: nextDubState });
+
+        const preferredMode = anime.mode;
+        const preferredEpisodes =
+          preferredMode === "sub"
+            ? nextSubState.status === "loaded"
+              ? nextSubState.episodes
+              : []
+            : nextDubState.status === "loaded"
+              ? nextDubState.episodes
+              : [];
+        const fallbackEpisodes =
+          preferredMode === "sub"
+            ? nextDubState.status === "loaded"
+              ? nextDubState.episodes
+              : []
+            : nextSubState.status === "loaded"
+              ? nextSubState.episodes
+              : [];
+
+        if (preferredEpisodes.length === 0 && fallbackEpisodes.length > 0) {
+          setActiveMode(preferredMode === "sub" ? "dub" : "sub");
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load details");
@@ -55,22 +127,22 @@ export function AnimeDetailsPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, mode, anime]);
+  }, [id, anime?.mode]);
 
   const playEpisode = useCallback(
-    (episode: string, episodes: string[]) => {
+    (episode: string, episodes: string[], mode: AnimeMode) => {
       if (!anime?.id) return;
       setPlayingEpisode(episode);
       navigate("/watch", {
         state: {
-          anime: { id: anime.id, name: anime.name, mode: anime.mode },
+          anime: { id: anime.id, name: details?.name ?? anime.name, mode },
           episodes,
           currentEpisode: episode,
         },
       });
       setPlayingEpisode(null);
     },
-    [navigate, anime]
+    [navigate, anime, details?.name]
   );
 
   if (!id) {
@@ -110,7 +182,17 @@ export function AnimeDetailsPage() {
   }
 
   const displayName = details?.name ?? anime?.name ?? "Unknown";
-  const episodes = episodesState.status === "loaded" ? episodesState.episodes : [];
+  const subEpisodes = episodesByMode.sub.status === "loaded" ? episodesByMode.sub.episodes : [];
+  const dubEpisodes = episodesByMode.dub.status === "loaded" ? episodesByMode.dub.episodes : [];
+  const hasSub = subEpisodes.length > 0;
+  const hasDub = dubEpisodes.length > 0;
+  const tabs = MODES.filter((mode) => (mode === "sub" ? hasSub : hasDub));
+  const episodes = activeMode === "sub" ? subEpisodes : dubEpisodes;
+  const activeState = episodesByMode[activeMode];
+  const isAnyEpisodesLoading =
+    episodesByMode.sub.status === "loading" || episodesByMode.dub.status === "loading";
+  const allModesFailed =
+    episodesByMode.sub.status === "error" && episodesByMode.dub.status === "error";
 
   return (
     <>
@@ -121,9 +203,7 @@ export function AnimeDetailsPage() {
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
-          <span className="text-sm font-medium truncate flex-1 min-w-0">
-            {displayName} ({anime.mode === "dub" ? "Dub" : "Sub"})
-          </span>
+          <span className="text-sm font-medium truncate flex-1 min-w-0">{displayName}</span>
         </div>
 
         <div className="container flex flex-col gap-6 p-6 md:p-8 max-w-3xl mx-auto">
@@ -131,6 +211,7 @@ export function AnimeDetailsPage() {
             {details?.thumbnail ? (
               <img
                 src={details.thumbnail}
+                draggable={false}
                 alt=""
                 className="w-32 sm:w-40 aspect-[2/3] object-cover rounded-xl border-2 border-border shrink-0"
               />
@@ -141,7 +222,7 @@ export function AnimeDetailsPage() {
             )}
             <div className="flex flex-col gap-2 min-w-0 flex-1">
               <p className="text-sm text-muted-foreground">
-                {details?.type ?? "TV"} · {anime?.episodeCount ?? episodes.length} episodes ({mode})
+                {details?.type ?? "TV"} · {episodes.length || anime?.episodeCount || 0} episodes
               </p>
               {details?.description && (
                 <p className="text-sm text-foreground/90 line-clamp-6">{details.description}</p>
@@ -151,11 +232,35 @@ export function AnimeDetailsPage() {
 
           <section className="flex flex-col gap-3">
             <h2 className="text-lg font-semibold">Episodes</h2>
-            {episodesState.status === "loading" && (
+            {tabs.length > 0 && (
+              <Tabs
+                value={activeMode}
+                onValueChange={(value) => {
+                  if (value === "sub" || value === "dub") setActiveMode(value);
+                }}
+              >
+                <TabsList>
+                  {tabs.map((mode) => (
+                    <TabsTrigger key={mode} value={mode} className="capitalize">
+                      {mode}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            )}
+            {isAnyEpisodesLoading && (
               <p className="text-sm text-muted-foreground">Loading episodes…</p>
             )}
-            {episodesState.status === "error" && (
-              <p className="text-sm text-destructive">{episodesState.message}</p>
+            {!isAnyEpisodesLoading && activeState.status === "error" && (
+              <p className="text-sm text-destructive">{activeState.message}</p>
+            )}
+            {!isAnyEpisodesLoading && tabs.length === 0 && !allModesFailed && (
+              <p className="text-sm text-muted-foreground">No episodes available.</p>
+            )}
+            {!isAnyEpisodesLoading && allModesFailed && (
+              <p className="text-sm text-destructive">
+                Failed to load episodes for both sub and dub.
+              </p>
             )}
             {episodes.length > 0 && (
               <ul className="flex flex-wrap gap-2">
@@ -163,15 +268,14 @@ export function AnimeDetailsPage() {
                   const isPlaying = playingEpisode === ep;
                   return (
                     <li key={ep}>
-                      <button
+                      <Button
                         type="button"
-                        onClick={() => playEpisode(ep, episodes)}
+                        variant="outline"
+                        onClick={() => playEpisode(ep, episodes, activeMode)}
                         disabled={isPlaying}
-                        className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1.5 text-xs font-medium hover:bg-muted/80 transition-colors disabled:opacity-50"
                       >
-                        <Play className="h-3 w-3 shrink-0" />
-                        {isPlaying ? "Resolving…" : ep}
-                      </button>
+                        {ep}
+                      </Button>
                     </li>
                   );
                 })}

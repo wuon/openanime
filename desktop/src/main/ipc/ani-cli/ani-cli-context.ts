@@ -14,6 +14,8 @@ export interface AnimeSearchResult {
   name: string;
   episodeCount: number;
   mode: "sub" | "dub";
+  hasSub?: boolean;
+  hasDub?: boolean;
 }
 
 export interface StreamUrlResult {

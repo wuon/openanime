@@ -4,18 +4,27 @@ import { useNavigate } from "react-router-dom";
 
 import LogoRoundedSquareLight from "@/renderer/assets/logo-rounded-square-light.svg";
 import LogoRoundedSquare from "@/renderer/assets/logo-rounded-square.svg";
+import { HorizontalCarousel } from "@/renderer/components/horizontal-carousel";
 import { Button } from "@/renderer/components/ui/button";
-import { HorizontalCarousel } from "@/renderer/components/ui/horizontal-carousel";
 import { Input } from "@/renderer/components/ui/input";
 import { useDebouncedValue } from "@/renderer/hooks/use-debounced-value";
-import { useWelcomeRecentlyWatched } from "@/renderer/hooks/use-welcome-recently-watched";
 import { useWelcomeRecentUploads } from "@/renderer/hooks/use-welcome-recent-uploads";
+import { useWelcomeRecentlyWatched } from "@/renderer/hooks/use-welcome-recently-watched";
 import { useWelcomeSearch } from "@/renderer/hooks/use-welcome-search";
 import { type AnimeSearchResult as AnimeSearchResultType } from "@/renderer/lib/ani-cli-bridge";
 import { type RecentlyWatchedEntry } from "@/renderer/lib/recently-watched-bridge";
 
 const SEARCH_DEBOUNCE_MS = 500;
 const RECENT_PAGE_SIZE = 12;
+
+function getAvailabilityLabel(anime: AnimeSearchResultType): string {
+  const hasSub = anime.hasSub ?? anime.mode === "sub";
+  const hasDub = anime.hasDub ?? anime.mode === "dub";
+
+  if (hasSub && hasDub) return "sub / dub";
+  if (hasDub) return "dub";
+  return "sub";
+}
 
 export function WelcomePage() {
   const navigate = useNavigate();
@@ -25,12 +34,8 @@ export function WelcomePage() {
   const { results, loading, error, searchThumbnails } = useWelcomeSearch(debouncedQuery);
   const { recentAnime, recentLoading, recentThumbnails } =
     useWelcomeRecentUploads(RECENT_PAGE_SIZE);
-  const {
-    recentlyWatched,
-    recentlyWatchedLoading,
-    recentlyWatchedDetails,
-    clearRecentlyWatched,
-  } = useWelcomeRecentlyWatched();
+  const { recentlyWatched, recentlyWatchedLoading, recentlyWatchedDetails, clearRecentlyWatched } =
+    useWelcomeRecentlyWatched();
 
   const openAniCliRepo = useCallback(() => {
     const url = "https://github.com/pystardust/ani-cli";
@@ -135,7 +140,7 @@ export function WelcomePage() {
               id: anime.id,
               coverUrl: searchThumbnails[anime.id] ?? null,
               title: anime.name,
-              subtitle: `Episode ${anime.episodeCount} · ${anime.mode}`,
+              subtitle: `Episode ${anime.episodeCount} · ${getAvailabilityLabel(anime)}`,
               onClick: () => openSearchResult(anime),
             }))}
           />
@@ -189,7 +194,7 @@ export function WelcomePage() {
                   id: anime.id,
                   coverUrl: recentThumbnails[anime.id] ?? null,
                   title: anime.name,
-                  subtitle: `Episode ${anime.episodeCount} · ${anime.mode}`,
+                  subtitle: `Episode ${anime.episodeCount} · ${getAvailabilityLabel(anime)}`,
                   onClick: () => openRecentAnime(anime),
                 }))}
               />
