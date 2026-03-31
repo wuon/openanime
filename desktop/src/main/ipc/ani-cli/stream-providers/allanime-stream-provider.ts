@@ -1,3 +1,7 @@
+/*
+ * The following provider is a typescript port of the original allanime stream provider from pystardust/ani-cli.
+ * See https://github.com/pystardust/ani-cli (allanime stream provider).
+ */
 import { StreamProvider, StreamUrlResult } from "./stream-provider";
 
 const ALLANIME_REFERER = "https://allmanga.to";
