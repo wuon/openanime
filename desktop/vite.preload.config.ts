@@ -1,7 +1,7 @@
 import type { ConfigEnv, UserConfig } from "vite";
 import { defineConfig, mergeConfig } from "vite";
 
-import { external, getBuildConfig, pluginHotRestart } from "./vite.base.config";
+import { builtins, getBuildConfig, pluginHotRestart } from "./vite.base.config";
 
 // https://vitejs.dev/config
 export default defineConfig((env) => {
@@ -10,7 +10,7 @@ export default defineConfig((env) => {
   const config: UserConfig = {
     build: {
       rollupOptions: {
-        external,
+        external: builtins,
         // Preload scripts may contain Web assets, so use the `build.rollupOptions.input` instead `build.lib.entry`.
         input: forgeConfigSelf.entry,
         output: {

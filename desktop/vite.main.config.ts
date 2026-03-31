@@ -2,7 +2,7 @@ import path from "path";
 import type { ConfigEnv, UserConfig } from "vite";
 import { defineConfig, mergeConfig } from "vite";
 
-import { external, getBuildConfig, getBuildDefine, pluginHotRestart } from "./vite.base.config";
+import { builtins, getBuildConfig, getBuildDefine, pluginHotRestart } from "./vite.base.config";
 
 // https://vitejs.dev/config
 export default defineConfig((env) => {
@@ -17,7 +17,9 @@ export default defineConfig((env) => {
         formats: ["cjs"],
       },
       rollupOptions: {
-        external,
+        // The packaged app does not ship runtime node_modules in Resources,
+        // so bundle all non-builtin dependencies into the main bundle.
+        external: builtins,
       },
     },
     plugins: [pluginHotRestart("restart")],
