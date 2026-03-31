@@ -74,7 +74,6 @@
     "react-router-dom": "^6.29.0",
     "semver": "^7.7.4",
     "tailwind-merge": "^2.4.0",
-    "tailwindcss-animate": "^1.0.7",
-    "update-electron-app": "^3.1.2"
+    "tailwindcss-animate": "^1.0.7"
   }
 }

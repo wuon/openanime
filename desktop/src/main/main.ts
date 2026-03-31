@@ -1,11 +1,8 @@
 import { BrowserWindow, app } from "electron";
 import path from "path";
-import { type IUpdateElectronAppOptions, updateElectronApp } from "update-electron-app";
 
 import { registerListeners, unregisterListeners } from "@/main/ipc/listeners";
 import { startStreamProxy } from "@/main/stream-proxy";
-
-const runUpdateElectronApp = updateElectronApp as (opts?: IUpdateElectronAppOptions) => void;
 
 const createWindow = () => {
   // Create the browser window.
@@ -37,17 +34,6 @@ const createWindow = () => {
   }
 };
 
-const checkForUpdates = () => {
-  if (process.platform === "darwin") return;
-
-  runUpdateElectronApp({
-    updateSource: {
-      type: 0, // UpdateSourceType.ElectronPublicUpdateService
-      repo: "wuon/openanime",
-    },
-  });
-};
-
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
@@ -55,7 +41,6 @@ app.on("ready", () => {
   registerListeners();
   void startStreamProxy().then(() => {
     createWindow();
-    checkForUpdates();
   });
 });
 
