@@ -23,7 +23,7 @@ Experience [pystardust/ani-cli](https://github.com/pystardust/ani-cli) as a easy
 
 ### Windows (Experimental)
 
-[![Windows - Download](https://img.shields.io/badge/Windows-download-blue)](https://github.com/wuon/openanime/releases/download/v0.0.3-alpha/Openanime-0.0.3-alpha.Setup.exe)
+[![Windows - Download](https://img.shields.io/badge/Windows-download-blue)](https://github.com/wuon/openanime/releases/download/v1.0.0-alpha/Openanime-1.0.0-alpha.Setup.exe)
 
 Since the underlying tool relies on git bash, you will need to install git.
 
@@ -37,7 +37,7 @@ Or manually from https://git-scm.com/install/windows
 
 ### OSX
 
-[![OSX - Download](https://img.shields.io/badge/OSX-download-blue)](https://github.com/wuon/openanime/releases/download/v0.0.3-alpha/Openanime-darwin-arm64-0.0.3-alpha.zip)
+[![OSX - Download](https://img.shields.io/badge/OSX-download-blue)](https://github.com/wuon/openanime/releases/download/v1.0.0-alpha/Openanime-darwin-arm64-1.0.0-alpha.zip)
 
 Since the application is not signed or notarized, you will have to perform this command via terminal
 
@@ -51,8 +51,8 @@ When you download an app from outside the App Store, macOS attaches a com.apple.
 
 ### Linux (Experimental)
 
-[![.rpm - Download](https://img.shields.io/badge/.rpm-download-blue)](https://github.com/wuon/openanime/releases/download/v0.0.3-alpha/Openanime-0.0.3.alpha-1.x86_64.rpm)
-[![.deb - Download](https://img.shields.io/badge/.deb-download-blue)](https://github.com/wuon/openanime/releases/download/v0.0.3-alpha/openanime_0.0.3.alpha_amd64.deb)
+[![.rpm - Download](https://img.shields.io/badge/.rpm-download-blue)](https://github.com/wuon/openanime/releases/download/v1.0.0-alpha/Openanime-1.0.0-alpha-1.x86_64.rpm)
+[![.deb - Download](https://img.shields.io/badge/.deb-download-blue)](https://github.com/wuon/openanime/releases/download/1.0.0-alpha/openanime_1.0.0-alpha_amd64.deb)
 
 Unfortunately I haven't had time to optimize for Linux. Please let me know if anything is broken by [reporting an issue](https://github.com/wuon/openanime/issues)!
 
