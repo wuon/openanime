@@ -1,7 +1,7 @@
 {
   "name": "Openanime",
   "productName": "Openanime",
-  "version": "0.0.3-alpha",
+  "version": "1.0.0-alpha",
   "description": "Experience pystardust/ani-cli as an easy to use desktop application.",
   "main": ".vite/build/main.js",
   "scripts": {
