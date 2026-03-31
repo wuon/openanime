@@ -25,15 +25,7 @@ Experience [pystardust/ani-cli](https://github.com/pystardust/ani-cli) as a easy
 
 [![Windows - Download](https://img.shields.io/badge/Windows-download-blue)](https://github.com/wuon/openanime/releases/download/v1.0.0-alpha/Openanime-1.0.0-alpha.Setup.exe)
 
-Since the underlying tool relies on git bash, you will need to install git.
-
-Using winget tool
-
-```
-winget install --id Git.Git -e --source winget
-```
-
-Or manually from https://git-scm.com/install/windows
+This should work right out of the box, but if it doesn't feel free to [report an issue](https://github.com/wuon/openanime/issues)!
 
 ### OSX
 
