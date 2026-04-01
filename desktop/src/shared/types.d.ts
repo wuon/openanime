@@ -10,6 +10,7 @@ interface ThemeContext {
 
 interface AnimeSearchResult {
   id: string;
+  providerId: string;
   name: string;
   episodeCount: number;
   mode: "sub" | "dub";
@@ -24,6 +25,7 @@ interface StreamUrlResult {
 
 interface ShowDetails {
   id: string;
+  providerId: string;
   name: string;
   thumbnail: string | null;
   type: string;
@@ -31,14 +33,20 @@ interface ShowDetails {
 }
 
 interface RecentlyWatchedEntry {
-  animeId: string;
+  id: string;
+  providerId: string;
   episode: string;
   mode: "sub" | "dub";
   timestamp?: number;
 }
 
 interface RecentlyWatchedContext {
-  record: (animeId: string, episode: string, mode?: "sub" | "dub") => Promise<void>;
+  record: (
+    id: string,
+    providerId: string,
+    episode: string,
+    mode?: "sub" | "dub"
+  ) => Promise<void>;
   read: () => Promise<RecentlyWatchedEntry[]>;
   clear: () => Promise<void>;
 }
@@ -64,10 +72,15 @@ export interface UrlOpenerContext {
 
 interface StreamProviderContext {
   search: (query: string) => Promise<AnimeSearchResult[]>;
-  getEpisodes: (showId: string, mode?: "sub" | "dub") => Promise<string[]>;
-  getStreamUrl: (showId: string, episode: string, mode?: "sub" | "dub") => Promise<StreamUrlResult>;
+  getEpisodes: (providerId: string, mode?: "sub" | "dub") => Promise<string[]>;
+  getStreamUrl: (
+    id: string | null,
+    providerId: string | null,
+    episode: string,
+    mode?: "sub" | "dub"
+  ) => Promise<StreamUrlResult>;
   getStreamProxyBaseUrl: () => Promise<string>;
-  getShowDetails: (showId: string) => Promise<ShowDetails>;
+  getShowDetails: (providerId: string) => Promise<ShowDetails>;
   getRecent: (
     page: number,
     limit?: number

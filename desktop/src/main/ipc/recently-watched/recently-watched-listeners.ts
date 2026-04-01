@@ -9,7 +9,8 @@ import {
 } from "./recently-watched-channels";
 
 export interface RecentlyWatchedEntry {
-  animeId: string;
+  id: string;
+  providerId: string;
   episode: string;
   mode: "sub" | "dub";
   /** Present on rows written after timestamp support; ms since epoch. */
@@ -34,16 +35,24 @@ function parseLine(line: string): RecentlyWatchedEntry | null {
   const tsNum = Number(last);
   const hasTimestamp =
     parts.length >= 4 && Number.isFinite(tsNum) && /^\d+$/.test(last.trim());
+  const hasProviderId = parts.length >= 5;
   if (hasTimestamp) {
     const modeRaw = parts[parts.length - 2];
     const mode = modeRaw === "dub" ? "dub" : "sub";
-    const animeId = parts[0];
+    const id = parts[0];
+    if (hasProviderId) {
+      const providerId = parts[1];
+      const episode = parts.slice(2, -2).join(SEPARATOR);
+      return { id, providerId, episode, mode, timestamp: tsNum };
+    }
+    // Legacy rows: id was previously the provider id.
     const episode = parts.slice(1, -2).join(SEPARATOR);
-    return { animeId, episode, mode, timestamp: tsNum };
+    return { id, providerId: id, episode, mode, timestamp: tsNum };
   }
-  const [animeId, episode, modeRaw] = parts;
+  const [id, episode, modeRaw] = parts;
   const mode = modeRaw === "dub" ? "dub" : "sub";
-  return { animeId, episode, mode };
+  // Legacy rows: id was previously the provider id.
+  return { id, providerId: id, episode, mode };
 }
 
 async function readEntriesOldestFirst(filePath: string): Promise<RecentlyWatchedEntry[]> {
@@ -70,11 +79,23 @@ function sortKeyMs(e: RecentlyWatchedEntry, lineIndex: number): number {
 export function addRecentlyWatchedListeners() {
   ipcMain.handle(
     RECENTLY_WATCHED_RECORD_CHANNEL,
-    async (_event, animeId: string, episode: string, mode: "sub" | "dub") => {
-      if (typeof animeId !== "string" || typeof episode !== "string") return;
+    async (
+      _event,
+      id: string,
+      providerId: string,
+      episode: string,
+      mode: "sub" | "dub"
+    ) => {
+      if (
+        typeof id !== "string" ||
+        typeof providerId !== "string" ||
+        typeof episode !== "string"
+      ) {
+        return;
+      }
       const filePath = getFilePath();
       const ts = Date.now();
-      const line = `${animeId}${SEPARATOR}${episode}${SEPARATOR}${mode ?? "sub"}${SEPARATOR}${ts}\n`;
+      const line = `${id}${SEPARATOR}${providerId}${SEPARATOR}${episode}${SEPARATOR}${mode ?? "sub"}${SEPARATOR}${ts}\n`;
       try {
         await fs.promises.appendFile(filePath, line);
       } catch {
@@ -91,8 +112,8 @@ export function addRecentlyWatchedListeners() {
     const seen = new Set<string>();
     const newestUniqueFirst: RecentlyWatchedEntry[] = [];
     for (const { e } of indexed) {
-      if (seen.has(e.animeId)) continue;
-      seen.add(e.animeId);
+      if (seen.has(e.id)) continue;
+      seen.add(e.id);
       newestUniqueFirst.push(e);
       if (newestUniqueFirst.length >= READ_UNIQUE_LIMIT) break;
     }

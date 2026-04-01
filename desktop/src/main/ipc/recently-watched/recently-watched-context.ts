@@ -7,7 +7,8 @@ import {
 } from "./recently-watched-channels";
 
 export interface RecentlyWatchedEntry {
-  animeId: string;
+  id: string;
+  providerId: string;
   episode: string;
   mode: "sub" | "dub";
   timestamp?: number;
@@ -15,10 +16,11 @@ export interface RecentlyWatchedEntry {
 
 export function exposeRecentlyWatchedContext() {
   contextBridge.exposeInMainWorld("recentlyWatched", {
-    record: (animeId: string, episode: string, mode?: "sub" | "dub") =>
+    record: (id: string, providerId: string, episode: string, mode?: "sub" | "dub") =>
       ipcRenderer.invoke(
         RECENTLY_WATCHED_RECORD_CHANNEL,
-        animeId,
+        id,
+        providerId,
         episode,
         mode ?? "sub"
       ) as Promise<void>,

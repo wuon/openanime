@@ -8,10 +8,11 @@ const ALLANIME_API = "https://api.allanime.day";
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0";
 
-const SEARCH_GQL = `query( $search: SearchInput $limit: Int $page: Int $translationType: VaildTranslationTypeEnumType $countryOrigin: VaildCountryOriginEnumType ) { shows( search: $search limit: $limit page: $page translationType: $translationType countryOrigin: $countryOrigin ) { edges { _id name availableEpisodes __typename } } }`;
+const SEARCH_GQL = `query( $search: SearchInput $limit: Int $page: Int $translationType: VaildTranslationTypeEnumType $countryOrigin: VaildCountryOriginEnumType ) { shows( search: $search limit: $limit page: $page translationType: $translationType countryOrigin: $countryOrigin ) { edges { _id aniListId name availableEpisodes __typename } } }`;
 
 export interface AnimeSearchResult {
   id: string;
+  providerId: string;
   name: string;
   episodeCount: number;
   /** "sub" | "dub" - which mode was used for episode count */
@@ -22,6 +23,7 @@ export interface AnimeSearchResult {
 
 interface GqlShowEdge {
   _id: string;
+  aniListId?: string;
   name: string;
   availableEpisodes?: {
     sub?: string[] | number;
@@ -88,14 +90,15 @@ export async function searchAnime(
 
   return edges
     .map((edge) => ({
-      id: edge._id,
+      id: edge.aniListId ?? "",
+      providerId: edge._id,
       name: (edge.name ?? "").replace(/\\"/g, '"'),
       episodeCount: getEpisodeCount(edge, mode),
       mode,
       hasSub: hasEpisodes(edge, "sub"),
       hasDub: hasEpisodes(edge, "dub"),
     }))
-    .filter((r) => r.episodeCount > 0);
+    .filter((r) => Boolean(r.id) && r.episodeCount > 0);
 }
 
 export interface RecentAnimeResult {
@@ -140,14 +143,15 @@ export async function getRecentAnime(
 
   const items = edges
     .map((edge) => ({
-      id: edge._id,
+      id: edge.aniListId ?? "",
+      providerId: edge._id,
       name: (edge.name ?? "").replace(/\\"/g, '"'),
       episodeCount: getEpisodeCount(edge, mode),
       mode,
       hasSub: hasEpisodes(edge, "sub"),
       hasDub: hasEpisodes(edge, "dub"),
     }))
-    .filter((r) => r.episodeCount > 0);
+    .filter((r) => Boolean(r.id) && r.episodeCount > 0);
 
   return { items, hasMore: items.length >= limit };
 }
@@ -170,10 +174,10 @@ interface GqlShowDetailResponse {
 }
 
 export async function getEpisodesList(
-  showId: string,
+  providerId: string,
   mode: "sub" | "dub" = "sub"
 ): Promise<string[]> {
-  const variables = { showId };
+  const variables = { showId: providerId };
   const url = `${ALLANIME_API}/api?variables=${encodeURIComponent(JSON.stringify(variables))}&query=${encodeURIComponent(EPISODES_LIST_GQL)}`;
 
   const res = await fetch(url, {
@@ -202,12 +206,13 @@ export async function getEpisodesList(
 /**
  * Fetch show details (name, thumbnail, synopsis, etc.) for the details/watch page.
  */
-const SHOW_DETAILS_GQL = `query ($showId: String!) { show( _id: $showId ) { _id name thumbnail type description } }`;
+const SHOW_DETAILS_GQL = `query ($showId: String!) { show( _id: $showId ) { _id aniListId name thumbnail type description } }`;
 
 interface GqlShowDetailsPayload {
   data?: {
     show?: {
       _id: string;
+      aniListId?: string;
       name?: string;
       thumbnail?: string;
       type?: string;
@@ -218,14 +223,15 @@ interface GqlShowDetailsPayload {
 
 export interface ShowDetails {
   id: string;
+  providerId: string;
   name: string;
   thumbnail: string | null;
   type: string;
   description?: string | null;
 }
 
-export async function getShowDetails(showId: string): Promise<ShowDetails> {
-  const variables = { showId };
+export async function getShowDetails(providerId: string): Promise<ShowDetails> {
+  const variables = { showId: providerId };
   const url = `${ALLANIME_API}/api?variables=${encodeURIComponent(JSON.stringify(variables))}&query=${encodeURIComponent(SHOW_DETAILS_GQL)}`;
 
   const res = await fetch(url, {
@@ -246,7 +252,8 @@ export async function getShowDetails(showId: string): Promise<ShowDetails> {
     throw new Error("Show not found");
   }
   return {
-    id: show._id,
+    id: show.aniListId ?? "",
+    providerId: show._id,
     name: (show.name ?? "").replace(/\\"/g, '"'),
     thumbnail: show.thumbnail ?? null,
     type: show.type ?? "TV",

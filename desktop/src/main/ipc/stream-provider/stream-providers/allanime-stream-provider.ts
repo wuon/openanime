@@ -395,15 +395,19 @@ async function resolveSourceToCandidates(
 
 export class AllAnimeStreamProvider implements StreamProvider {
   async getStreamUrl(
-    showId: string,
+    _id: string | null,
+    providerId: string | null,
     episode: string,
     mode: "sub" | "dub" = "sub"
   ): Promise<StreamUrlResult> {
+    if (!providerId) {
+      throw new Error("Missing providerId for AllAnime stream lookup");
+    }
     const totalStartedAt = Date.now();
 
     const episodeQueryStartedAt = Date.now();
     const variables = {
-      showId,
+      showId: providerId,
       translationType: mode,
       episodeString: episode,
     };

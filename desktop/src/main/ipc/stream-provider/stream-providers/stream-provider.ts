@@ -4,5 +4,5 @@ export interface StreamUrlResult {
 }
 
 export interface StreamProvider {
-  getStreamUrl(showId: string, episode: string, mode: "sub" | "dub"): Promise<StreamUrlResult>;
+  getStreamUrl(id: string | null, providerId: string | null, episode: string, mode: "sub" | "dub"): Promise<StreamUrlResult>;
 }

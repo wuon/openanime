@@ -16,7 +16,7 @@ import { ShowDetails } from "@/shared/types";
 const MAX_AUTO_RECONNECT = 5;
 
 interface WatchState {
-  anime: { id: string; name: string; mode: "sub" | "dub" };
+  anime: { id: string; providerId: string; name: string; mode: "sub" | "dub" };
   episodes: string[];
   currentEpisode: string;
   /** When true, open on the latest episode (e.g. from recently uploaded tile) */
@@ -58,7 +58,7 @@ export function WatchPage() {
 
   const loadStream = useCallback(
     async (ep: string, opts?: { resumeFrom?: number | null }) => {
-      if (!anime?.id || !ep) return;
+      if (!anime?.providerId || !ep) return;
       clearReconnectTimeout();
       if (opts?.resumeFrom != null && opts.resumeFrom > 0) {
         resumeAfterLoadRef.current = opts.resumeFrom;
@@ -69,14 +69,19 @@ export function WatchPage() {
       setError(null);
       setPlaybackError(null);
       try {
-        const { url, referer } = await window.streamProvider.getStreamUrl(anime.id, ep, anime.mode);
+        const { url, referer } = await window.streamProvider.getStreamUrl(
+          anime.id,
+          anime.providerId,
+          ep,
+          anime.mode
+        );
         const base = await window.streamProvider.getStreamProxyBaseUrl();
         const urlWithProxy = `${base}/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
         setPlayUrl(urlWithProxy);
         setStreamRevision((r) => r + 1);
         setCurrentEpisode(ep);
         try {
-          await window.recentlyWatched.record(anime.id, ep, anime.mode);
+          await window.recentlyWatched.record(anime.id, anime.providerId, ep, anime.mode);
         } catch {
           // Ignore - recording is best-effort
         }
@@ -104,9 +109,9 @@ export function WatchPage() {
     setLoading(true);
     const initialEpisodes = state.episodes ?? [];
     void Promise.all([
-      window.streamProvider.getShowDetails(state.anime.id),
+      window.streamProvider.getShowDetails(state.anime.providerId),
       initialEpisodes.length === 0
-        ? window.streamProvider.getEpisodes(state.anime.id, state.anime.mode)
+        ? window.streamProvider.getEpisodes(state.anime.providerId, state.anime.mode)
         : Promise.resolve(initialEpisodes),
     ])
       .then(async ([d, epList]) => {
@@ -131,7 +136,13 @@ export function WatchPage() {
       })
       .catch(() => {
         if (!cancelled)
-          setDetails({ id: state.anime.id, name: state.anime.name, thumbnail: null, type: "TV" });
+          setDetails({
+            id: state.anime.id,
+            providerId: state.anime.providerId,
+            name: state.anime.name,
+            thumbnail: null,
+            type: "TV",
+          });
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -141,6 +152,7 @@ export function WatchPage() {
     };
   }, [
     state?.anime?.id,
+    state?.anime?.providerId,
     state?.anime?.name,
     state?.anime?.mode,
     state?.episodes,

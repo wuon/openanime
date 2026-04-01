@@ -11,6 +11,7 @@ import {
 
 export interface AnimeSearchResult {
   id: string;
+  providerId: string;
   name: string;
   episodeCount: number;
   mode: "sub" | "dub";
@@ -27,22 +28,29 @@ export function exposeStreamProviderContext() {
   contextBridge.exposeInMainWorld("streamProvider", {
     search: (query: string) =>
       ipcRenderer.invoke(STREAM_PROVIDER_SEARCH_CHANNEL, query) as Promise<AnimeSearchResult[]>,
-    getEpisodes: (showId: string, mode?: "sub" | "dub") =>
-      ipcRenderer.invoke(STREAM_PROVIDER_EPISODES_CHANNEL, showId, mode ?? "sub") as Promise<
+    getEpisodes: (providerId: string, mode?: "sub" | "dub") =>
+      ipcRenderer.invoke(STREAM_PROVIDER_EPISODES_CHANNEL, providerId, mode ?? "sub") as Promise<
         string[]
       >,
-    getStreamUrl: (showId: string, episode: string, mode?: "sub" | "dub") =>
+    getStreamUrl: (
+      id: string | null,
+      providerId: string | null,
+      episode: string,
+      mode?: "sub" | "dub"
+    ) =>
       ipcRenderer.invoke(
         STREAM_PROVIDER_STREAM_URL_CHANNEL,
-        showId,
+        id,
+        providerId,
         episode,
         mode ?? "sub"
       ) as Promise<StreamUrlResult>,
     getStreamProxyBaseUrl: () =>
       ipcRenderer.invoke(STREAM_PROVIDER_STREAM_PROXY_BASE_CHANNEL) as Promise<string>,
-    getShowDetails: (showId: string) =>
-      ipcRenderer.invoke(STREAM_PROVIDER_SHOW_DETAILS_CHANNEL, showId) as Promise<{
+    getShowDetails: (providerId: string) =>
+      ipcRenderer.invoke(STREAM_PROVIDER_SHOW_DETAILS_CHANNEL, providerId) as Promise<{
         id: string;
+        providerId: string;
         name: string;
         thumbnail: string | null;
         type: string;

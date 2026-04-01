@@ -47,7 +47,7 @@ export function WelcomePage() {
 
   const openSearchResult = useCallback(
     (anime: AnimeSearchResult) => {
-      navigate(`/anime/${anime.id}`, {
+      navigate(`/anime/${anime.id}?providerId=${encodeURIComponent(anime.providerId)}`, {
         state: { anime },
       });
     },
@@ -58,7 +58,7 @@ export function WelcomePage() {
     (anime: AnimeSearchResult) => {
       navigate("/watch", {
         state: {
-          anime: { id: anime.id, name: anime.name, mode: anime.mode },
+          anime: { id: anime.id, providerId: anime.providerId, name: anime.name, mode: anime.mode },
           episodes: [],
           currentEpisode: "1",
           preferLatest: true,
@@ -70,10 +70,10 @@ export function WelcomePage() {
 
   const openRecentlyWatched = useCallback(
     (entry: RecentlyWatchedEntry) => {
-      const name = recentlyWatchedDetails[entry.animeId]?.name ?? "Anime";
+      const name = recentlyWatchedDetails[entry.id]?.name ?? "Anime";
       navigate("/watch", {
         state: {
-          anime: { id: entry.animeId, name, mode: entry.mode },
+          anime: { id: entry.id, providerId: entry.providerId, name, mode: entry.mode },
           episodes: [],
           currentEpisode: entry.episode,
         },
@@ -172,9 +172,9 @@ export function WelcomePage() {
             ) : recentlyWatched.length > 0 ? (
               <HorizontalCarousel
                 items={recentlyWatched.map((entry, index) => ({
-                  id: `${entry.animeId}-${entry.episode}-${index}`,
-                  coverUrl: recentlyWatchedDetails[entry.animeId]?.thumbnail ?? null,
-                  title: recentlyWatchedDetails[entry.animeId]?.name ?? entry.animeId,
+                  id: `${entry.id}-${entry.episode}-${index}`,
+                  coverUrl: recentlyWatchedDetails[entry.id]?.thumbnail ?? null,
+                  title: recentlyWatchedDetails[entry.id]?.name ?? entry.id,
                   subtitle: `Episode ${entry.episode} · ${entry.mode}`,
                   onClick: () => openRecentlyWatched(entry),
                 }))}

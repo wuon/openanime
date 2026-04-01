@@ -4,11 +4,12 @@ import { StreamProvider, StreamUrlResult } from "./stream-providers/stream-provi
 const allAnimeStreamProvider: StreamProvider = new AllAnimeStreamProvider();
 
 export async function getStreamUrl(
-  showId: string,
+  id: string | null,
+  providerId: string | null,
   episode: string,
   mode: "sub" | "dub" = "sub"
 ): Promise<StreamUrlResult> {
-  return allAnimeStreamProvider.getStreamUrl(showId, episode, mode);
+  return allAnimeStreamProvider.getStreamUrl(id, providerId, episode, mode);
 }
 
 export type { StreamProvider, StreamUrlResult };

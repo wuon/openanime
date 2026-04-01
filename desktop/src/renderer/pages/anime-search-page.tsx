@@ -56,7 +56,7 @@ export function AnimeSearchPage() {
   const loadEpisodes = useCallback(async (anime: AnimeSearchResult) => {
     setEpisodesByShowId((prev) => ({ ...prev, [anime.id]: { status: "loading" } }));
     try {
-      const episodes = await window.streamProvider.getEpisodes(anime.id, anime.mode);
+      const episodes = await window.streamProvider.getEpisodes(anime.providerId, anime.mode);
       setEpisodesByShowId((prev) => ({
         ...prev,
         [anime.id]: { status: "loaded", episodes },
@@ -91,7 +91,7 @@ export function AnimeSearchPage() {
       setPlayingEpisode(`${anime.id}-${episode}`);
       navigate("/watch", {
         state: {
-          anime: { id: anime.id, name: anime.name, mode: anime.mode },
+          anime: { id: anime.id, providerId: anime.providerId, name: anime.name, mode: anime.mode },
           episodes,
           currentEpisode: episode,
         },

@@ -35,16 +35,26 @@ export function AnimeDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [playingEpisode, setPlayingEpisode] = useState<string | null>(null);
   const [activeMode, setActiveMode] = useState<AnimeMode>(state?.anime?.mode ?? "sub");
+  const providerIdFromQuery = new URLSearchParams(location.search).get("providerId") ?? undefined;
 
   const anime =
-    state?.anime ?? (id ? { id, name: "", episodeCount: 0, mode: "sub" as const } : null);
+    state?.anime ??
+    (id && providerIdFromQuery
+      ? {
+          id,
+          providerId: providerIdFromQuery,
+          name: "",
+          episodeCount: 0,
+          mode: "sub" as const,
+        }
+      : null);
 
   useEffect(() => {
     setActiveMode(anime?.mode ?? "sub");
   }, [anime?.id, anime?.mode]);
 
   useEffect(() => {
-    if (!id || !anime) {
+    if (!id || !anime?.providerId) {
       setLoading(false);
       return;
     }
@@ -54,9 +64,9 @@ export function AnimeDetailsPage() {
     setEpisodesByMode({ sub: { status: "loading" }, dub: { status: "loading" } });
 
     void Promise.allSettled([
-      window.streamProvider.getShowDetails(id),
-      window.streamProvider.getEpisodes(id, "sub"),
-      window.streamProvider.getEpisodes(id, "dub"),
+      window.streamProvider.getShowDetails(anime.providerId),
+      window.streamProvider.getEpisodes(anime.providerId, "sub"),
+      window.streamProvider.getEpisodes(anime.providerId, "dub"),
     ])
       .then(([detailsResult, subResult, dubResult]) => {
         if (cancelled) return;
@@ -126,7 +136,7 @@ export function AnimeDetailsPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, anime?.mode]);
+  }, [id, anime?.providerId, anime?.mode]);
 
   const playEpisode = useCallback(
     (episode: string, episodes: string[], mode: AnimeMode) => {
@@ -134,7 +144,12 @@ export function AnimeDetailsPage() {
       setPlayingEpisode(episode);
       navigate("/watch", {
         state: {
-          anime: { id: anime.id, name: details?.name ?? anime.name, mode },
+          anime: {
+            id: anime.id,
+            providerId: anime.providerId,
+            name: details?.name ?? anime.name,
+            mode,
+          },
           episodes,
           currentEpisode: episode,
         },
