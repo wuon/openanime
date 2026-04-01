@@ -16,11 +16,10 @@ interface HeroProps {
 export function Hero({ stats }: HeroProps) {
   const macDownloadUrl =
     stats.downloadLinks.mac ??
-    (stats.latestRelease
-      ? `${GITHUB_REPO}/releases/download/v${stats.latestRelease}/Openanime-darwin-arm64-${stats.latestRelease}.zip`
-      : `${GITHUB_REPO}/releases`);
+    `${GITHUB_REPO}/releases/download/v1.0.0-alpha/Openanime-darwin-arm64-1.0.0-alpha.zip`;
   const windowsDownloadUrl =
-    stats.downloadLinks.windows ?? `${GITHUB_REPO}/releases`;
+    stats.downloadLinks.windows ??
+    `${GITHUB_REPO}/releases/download/v1.0.0-alpha/Openanime-1.0.0-alpha.Setup.exe`;
 
   return (
     <div className="relative z-10 min-h-screen flex flex-col">
