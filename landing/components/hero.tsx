@@ -2,9 +2,10 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { MacDownloadButton } from "@/components/mac-download-button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { ExternalLink, Github } from "lucide-react";
+import { ChevronDown, ExternalLink } from "lucide-react";
 import type { GitHubStats } from "@/lib/github";
 import { formatCount } from "@/lib/github";
+import Link from "next/link";
 
 const GITHUB_REPO = "https://github.com/wuon/openanime";
 
@@ -13,6 +14,14 @@ interface HeroProps {
 }
 
 export function Hero({ stats }: HeroProps) {
+  const macDownloadUrl =
+    stats.downloadLinks.mac ??
+    (stats.latestRelease
+      ? `${GITHUB_REPO}/releases/download/v${stats.latestRelease}/Openanime-darwin-arm64-${stats.latestRelease}.zip`
+      : `${GITHUB_REPO}/releases`);
+  const windowsDownloadUrl =
+    stats.downloadLinks.windows ?? `${GITHUB_REPO}/releases`;
+
   return (
     <div className="relative z-10 min-h-screen flex flex-col">
       {/* Header */}
@@ -78,13 +87,24 @@ export function Hero({ stats }: HeroProps) {
           {/* CTA Buttons */}
           <div className="flex flex-wrap items-center gap-3">
             <MacDownloadButton
-              downloadUrl={
-                stats.latestRelease
-                  ? `${GITHUB_REPO}/releases/download/v${stats.latestRelease}/Openanime-darwin-arm64-${stats.latestRelease}.zip`
-                  : `${GITHUB_REPO}/releases`
+              downloadUrl={macDownloadUrl}
+              isDirectDownload={
+                !!stats.downloadLinks.mac || !!stats.latestRelease
               }
-              isDirectDownload={!!stats.latestRelease}
             />
+            <Button
+              size="lg"
+              className="rounded-full gap-2 px-6 h-12 text-base cursor-pointer"
+              asChild
+            >
+              <Link
+                href={windowsDownloadUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Download for Windows
+              </Link>
+            </Button>
           </div>
 
           {/* Stats */}

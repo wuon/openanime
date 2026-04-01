@@ -46,7 +46,7 @@ export function MacDownloadButton({
     <>
       <Button
         size="lg"
-        className="rounded-full bg-foreground text-background hover:bg-foreground/90 gap-2 px-6 h-12 text-base cursor-pointer"
+        className="rounded-full gap-2 px-6 h-12 text-base cursor-pointer"
         onClick={handleDownload}
       >
         Download for Mac

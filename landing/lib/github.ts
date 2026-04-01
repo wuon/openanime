@@ -5,6 +5,25 @@ export interface GitHubStats {
   stars: number
   downloads: number
   latestRelease: string | null
+  downloadLinks: {
+    mac: string | null
+    windows: string | null
+    linuxDeb: string | null
+    linuxRpm: string | null
+  }
+}
+
+interface ReleaseAsset {
+  name: string
+  download_count: number
+  browser_download_url: string
+}
+
+function findAsset(
+  assets: ReleaseAsset[],
+  predicate: (asset: ReleaseAsset) => boolean
+): string | null {
+  return assets.find(predicate)?.browser_download_url ?? null
 }
 
 function formatCount(n: number): string {
@@ -39,7 +58,7 @@ export async function getGitHubStats(): Promise<GitHubStats> {
       releasesRes.json() as Promise<
         Array<{
           tag_name: string
-          assets: Array<{ download_count: number }>
+          assets: ReleaseAsset[]
         }>
       >,
     ])
@@ -52,17 +71,37 @@ export async function getGitHubStats(): Promise<GitHubStats> {
 
     const latestRelease =
       releases.length > 0 ? releases[0].tag_name.replace(/^v/, "") : null
+    const latestAssets = releases[0]?.assets ?? []
+    const downloadLinks = {
+      mac: findAsset(
+        latestAssets,
+        (asset) => /\.zip$/i.test(asset.name) && /(darwin|mac|osx)/i.test(asset.name)
+      ),
+      windows: findAsset(
+        latestAssets,
+        (asset) => /\.exe$/i.test(asset.name) && /(win|setup|squirrel)/i.test(asset.name)
+      ),
+      linuxDeb: findAsset(latestAssets, (asset) => /\.deb$/i.test(asset.name)),
+      linuxRpm: findAsset(latestAssets, (asset) => /\.rpm$/i.test(asset.name)),
+    }
 
     return {
       stars: repo.stargazers_count,
       downloads,
       latestRelease,
+      downloadLinks,
     }
   } catch {
     return {
       stars: 0,
       downloads: 0,
       latestRelease: null,
+      downloadLinks: {
+        mac: null,
+        windows: null,
+        linuxDeb: null,
+        linuxRpm: null,
+      },
     }
   }
 }
