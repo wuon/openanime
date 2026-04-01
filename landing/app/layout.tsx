@@ -9,7 +9,7 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: 'Openanime - Anime Streaming Desktop App',
-  description: 'Experience ani-cli as an easy-to-use desktop application. Openanime bridges the gap between the command line and a modern UI, offering a streamlined viewing experience for every anime fan.',
+  description: 'Browse your favorite anime, binge entire series, and stay up to date with the latest releases—all in a clean, simple app built for anime fans.',
   icons: {
     icon: [
       {

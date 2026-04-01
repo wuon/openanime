@@ -346,7 +346,7 @@ async function resolveSourceToCandidates(
 
   const providerUrl = toAbsoluteAllAnimeUrl(decodedPath);
 
-  // ani-cli behavior: Yt-mp4 (fast4speed) decoded path is already a direct playable URL.
+  // Provider behavior: Yt-mp4 (fast4speed) decoded path is already a direct playable URL.
   if (sourceName === "Yt-mp4") {
     const referer = refererForDirectUrl(providerUrl);
     logStep("yt-mp4 direct url shortcut", decodeStartedAt);

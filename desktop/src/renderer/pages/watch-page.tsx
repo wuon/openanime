@@ -69,8 +69,8 @@ export function WatchPage() {
       setError(null);
       setPlaybackError(null);
       try {
-        const { url, referer } = await window.aniCli.getStreamUrl(anime.id, ep, anime.mode);
-        const base = await window.aniCli.getStreamProxyBaseUrl();
+        const { url, referer } = await window.streamProvider.getStreamUrl(anime.id, ep, anime.mode);
+        const base = await window.streamProvider.getStreamProxyBaseUrl();
         const urlWithProxy = `${base}/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
         setPlayUrl(urlWithProxy);
         setStreamRevision((r) => r + 1);
@@ -104,9 +104,9 @@ export function WatchPage() {
     setLoading(true);
     const initialEpisodes = state.episodes ?? [];
     void Promise.all([
-      window.aniCli.getShowDetails(state.anime.id),
+      window.streamProvider.getShowDetails(state.anime.id),
       initialEpisodes.length === 0
-        ? window.aniCli.getEpisodes(state.anime.id, state.anime.mode)
+        ? window.streamProvider.getEpisodes(state.anime.id, state.anime.mode)
         : Promise.resolve(initialEpisodes),
     ])
       .then(async ([d, epList]) => {

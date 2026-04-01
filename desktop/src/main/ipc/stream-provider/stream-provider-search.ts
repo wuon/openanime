@@ -153,7 +153,7 @@ export async function getRecentAnime(
 }
 
 /**
- * Fetch episode list for a show (same API as ani-cli episodes_list()).
+ * Fetch episode list for a show (same API as provider episode listing).
  */
 const EPISODES_LIST_GQL = `query ($showId: String!) { show( _id: $showId ) { _id availableEpisodesDetail } }`;
 

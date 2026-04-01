@@ -1,5 +1,6 @@
 import { Input } from "@/renderer/components/ui/input";
 import { useDebouncedValue } from "@/renderer/hooks/use-debounced-value";
+import { AnimeSearchResult } from "@/shared/types";
 import { ChevronDown, ChevronRight, Play, Search } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -36,7 +37,7 @@ export function AnimeSearchPage() {
     setError(null);
     setExpandedId(null);
     setEpisodesByShowId({});
-    window.aniCli
+    window.streamProvider
       .search(q)
       .then((list) => {
         if (!cancelled) setResults(list);
@@ -55,7 +56,7 @@ export function AnimeSearchPage() {
   const loadEpisodes = useCallback(async (anime: AnimeSearchResult) => {
     setEpisodesByShowId((prev) => ({ ...prev, [anime.id]: { status: "loading" } }));
     try {
-      const episodes = await window.aniCli.getEpisodes(anime.id, anime.mode);
+      const episodes = await window.streamProvider.getEpisodes(anime.id, anime.mode);
       setEpisodesByShowId((prev) => ({
         ...prev,
         [anime.id]: { status: "loaded", episodes },
@@ -105,7 +106,7 @@ export function AnimeSearchPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Anime search</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Search using the same source as ani-cli (allanime). Click an anime to see episodes.
+          Search from the current stream provider (AllAnime). Click an anime to see episodes.
         </p>
       </div>
 

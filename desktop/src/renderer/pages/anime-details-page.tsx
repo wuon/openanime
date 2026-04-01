@@ -54,9 +54,9 @@ export function AnimeDetailsPage() {
     setEpisodesByMode({ sub: { status: "loading" }, dub: { status: "loading" } });
 
     void Promise.allSettled([
-      window.aniCli.getShowDetails(id),
-      window.aniCli.getEpisodes(id, "sub"),
-      window.aniCli.getEpisodes(id, "dub"),
+      window.streamProvider.getShowDetails(id),
+      window.streamProvider.getEpisodes(id, "sub"),
+      window.streamProvider.getEpisodes(id, "dub"),
     ])
       .then(([detailsResult, subResult, dubResult]) => {
         if (cancelled) return;

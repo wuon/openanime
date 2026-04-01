@@ -1,13 +1,13 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 import {
-  ANI_CLI_EPISODES_CHANNEL,
-  ANI_CLI_RECENT_CHANNEL,
-  ANI_CLI_SEARCH_CHANNEL,
-  ANI_CLI_SHOW_DETAILS_CHANNEL,
-  ANI_CLI_STREAM_PROXY_BASE_CHANNEL,
-  ANI_CLI_STREAM_URL_CHANNEL,
-} from "./ani-cli-channels";
+  STREAM_PROVIDER_EPISODES_CHANNEL,
+  STREAM_PROVIDER_RECENT_CHANNEL,
+  STREAM_PROVIDER_SEARCH_CHANNEL,
+  STREAM_PROVIDER_SHOW_DETAILS_CHANNEL,
+  STREAM_PROVIDER_STREAM_PROXY_BASE_CHANNEL,
+  STREAM_PROVIDER_STREAM_URL_CHANNEL,
+} from "./stream-provider-channels";
 
 export interface AnimeSearchResult {
   id: string;
@@ -23,23 +23,25 @@ export interface StreamUrlResult {
   referer: string;
 }
 
-export function exposeAniCliContext() {
-  contextBridge.exposeInMainWorld("aniCli", {
+export function exposeStreamProviderContext() {
+  contextBridge.exposeInMainWorld("streamProvider", {
     search: (query: string) =>
-      ipcRenderer.invoke(ANI_CLI_SEARCH_CHANNEL, query) as Promise<AnimeSearchResult[]>,
+      ipcRenderer.invoke(STREAM_PROVIDER_SEARCH_CHANNEL, query) as Promise<AnimeSearchResult[]>,
     getEpisodes: (showId: string, mode?: "sub" | "dub") =>
-      ipcRenderer.invoke(ANI_CLI_EPISODES_CHANNEL, showId, mode ?? "sub") as Promise<string[]>,
+      ipcRenderer.invoke(STREAM_PROVIDER_EPISODES_CHANNEL, showId, mode ?? "sub") as Promise<
+        string[]
+      >,
     getStreamUrl: (showId: string, episode: string, mode?: "sub" | "dub") =>
       ipcRenderer.invoke(
-        ANI_CLI_STREAM_URL_CHANNEL,
+        STREAM_PROVIDER_STREAM_URL_CHANNEL,
         showId,
         episode,
         mode ?? "sub"
       ) as Promise<StreamUrlResult>,
     getStreamProxyBaseUrl: () =>
-      ipcRenderer.invoke(ANI_CLI_STREAM_PROXY_BASE_CHANNEL) as Promise<string>,
+      ipcRenderer.invoke(STREAM_PROVIDER_STREAM_PROXY_BASE_CHANNEL) as Promise<string>,
     getShowDetails: (showId: string) =>
-      ipcRenderer.invoke(ANI_CLI_SHOW_DETAILS_CHANNEL, showId) as Promise<{
+      ipcRenderer.invoke(STREAM_PROVIDER_SHOW_DETAILS_CHANNEL, showId) as Promise<{
         id: string;
         name: string;
         thumbnail: string | null;
@@ -47,7 +49,7 @@ export function exposeAniCliContext() {
         description?: string | null;
       }>,
     getRecent: (page: number, limit?: number) =>
-      ipcRenderer.invoke(ANI_CLI_RECENT_CHANNEL, page, limit) as Promise<{
+      ipcRenderer.invoke(STREAM_PROVIDER_RECENT_CHANNEL, page, limit) as Promise<{
         items: AnimeSearchResult[];
         hasMore: boolean;
       }>,

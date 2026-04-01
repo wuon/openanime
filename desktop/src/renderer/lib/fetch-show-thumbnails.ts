@@ -20,7 +20,7 @@ export async function mergeShowThumbnailsFromShowDetails<T extends { id: string 
   await forEachWithConcurrency(toFetch, concurrency, async (anime) => {
     if (cancelled()) return;
     try {
-      const details = await window.aniCli.getShowDetails(anime.id);
+      const details = await window.streamProvider.getShowDetails(anime.id);
       if (cancelled()) return;
       setMap((prev) =>
         prev[anime.id] !== undefined ? prev : { ...prev, [anime.id]: details.thumbnail ?? null }
@@ -47,7 +47,7 @@ export async function mergeShowDetailsByAnimeId(
   await forEachWithConcurrency(animeIds, concurrency, async (animeId) => {
     if (cancelled()) return;
     try {
-      const details = await window.aniCli.getShowDetails(animeId);
+      const details = await window.streamProvider.getShowDetails(animeId);
       if (cancelled()) return;
       setDetails((prev) =>
         prev[animeId] !== undefined

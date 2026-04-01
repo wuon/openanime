@@ -62,7 +62,7 @@ export interface UrlOpenerContext {
   openUrl: (url: string) => Promise<void>;
 }
 
-interface AniCliContext {
+interface StreamProviderContext {
   search: (query: string) => Promise<AnimeSearchResult[]>;
   getEpisodes: (showId: string, mode?: "sub" | "dub") => Promise<string[]>;
   getStreamUrl: (showId: string, episode: string, mode?: "sub" | "dub") => Promise<StreamUrlResult>;
@@ -81,7 +81,7 @@ declare global {
   interface Window {
     app: AppContext;
     theme: ThemeContext;
-    aniCli: AniCliContext;
+    streamProvider: StreamProviderContext;
     recentlyWatched: RecentlyWatchedContext;
     windowControls: WindowControlsContext;
     urlOpener: UrlOpenerContext;

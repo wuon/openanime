@@ -14,7 +14,7 @@ export function useWelcomeRecentUploads(pageSize: number) {
   useEffect(() => {
     let cancelled = false;
     setRecentLoading(true);
-    window.aniCli
+    window.streamProvider
       .getRecent(1, pageSize)
       .then(
         (res: { items: AnimeSearchResult[]; hasMore: boolean }) => {

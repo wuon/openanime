@@ -24,7 +24,7 @@ export function useWelcomeSearch(debouncedQuery: string) {
     setLoading(true);
     setError(null);
     setSearchThumbnails({});
-    window.aniCli
+    window.streamProvider
       .search(q)
       .then((list) => {
         if (!cancelled) setResults(list);
