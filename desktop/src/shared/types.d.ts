@@ -30,12 +30,32 @@ interface ShowDetails {
   description?: string | null;
 }
 
+interface RecentlyWatchedEntry {
+  animeId: string;
+  episode: string;
+  mode: "sub" | "dub";
+  timestamp?: number;
+}
+
+interface RecentlyWatchedContext {
+  record: (animeId: string, episode: string, mode?: "sub" | "dub") => Promise<void>;
+  read: () => Promise<RecentlyWatchedEntry[]>;
+  clear: () => Promise<void>;
+}
+
 interface AppContext {
   version: () => Promise<string>;
   os: () => Promise<string>;
   /** True when required system dependencies are missing (e.g. Git Bash on Windows). */
   dependenciesRequired: () => Promise<boolean>;
   checkForUpdate: () => Promise<AppUpdateCheckResult>;
+}
+
+interface WindowControlsContext {
+  minimize: () => Promise<void>;
+  close: () => Promise<void>;
+  toggleMaximize: () => Promise<boolean>;
+  isMaximized: () => Promise<boolean>;
 }
 
 export interface UrlOpenerContext {
@@ -62,6 +82,8 @@ declare global {
     app: AppContext;
     theme: ThemeContext;
     aniCli: AniCliContext;
+    recentlyWatched: RecentlyWatchedContext;
+    windowControls: WindowControlsContext;
     urlOpener: UrlOpenerContext;
   }
 }

@@ -5,10 +5,7 @@ import {
   mergeShowDetailsByAnimeId,
   type ShowDetailsSummary,
 } from "@/renderer/lib/fetch-show-thumbnails";
-import {
-  type RecentlyWatchedEntry,
-  getRecentlyWatched,
-} from "@/renderer/lib/recently-watched-bridge";
+import { RecentlyWatchedEntry } from "@/shared/types";
 
 export function useWelcomeRecentlyWatched() {
   const [recentlyWatched, setRecentlyWatched] = useState<RecentlyWatchedEntry[]>([]);
@@ -20,7 +17,7 @@ export function useWelcomeRecentlyWatched() {
   useEffect(() => {
     let cancelled = false;
     setRecentlyWatchedLoading(true);
-    void getRecentlyWatched()
+    window.recentlyWatched
       .read()
       .then((entries) => {
         if (!cancelled) setRecentlyWatched(entries);
@@ -61,7 +58,7 @@ export function useWelcomeRecentlyWatched() {
   }, [recentlyWatched]);
 
   const clearRecentlyWatched = useCallback(async () => {
-    await getRecentlyWatched().clear();
+    await window.recentlyWatched.clear();
     setRecentlyWatched([]);
     setRecentlyWatchedDetails({});
   }, []);

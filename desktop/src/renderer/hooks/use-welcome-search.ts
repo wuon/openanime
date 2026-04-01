@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react";
 
 import {
-  type AnimeSearchResult,
-  getAniCli,
-} from "@/renderer/lib/ani-cli-bridge";
-import {
   SHOW_DETAILS_FETCH_CONCURRENCY,
   mergeShowThumbnailsFromShowDetails,
 } from "@/renderer/lib/fetch-show-thumbnails";
+import { AnimeSearchResult } from "@/shared/types";
 
 export function useWelcomeSearch(debouncedQuery: string) {
   const [results, setResults] = useState<AnimeSearchResult[]>([]);
@@ -27,8 +24,7 @@ export function useWelcomeSearch(debouncedQuery: string) {
     setLoading(true);
     setError(null);
     setSearchThumbnails({});
-    const aniCli = getAniCli();
-    void aniCli
+    window.aniCli
       .search(q)
       .then((list) => {
         if (!cancelled) setResults(list);

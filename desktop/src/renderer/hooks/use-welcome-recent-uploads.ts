@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react";
 
 import {
-  type AnimeSearchResult,
-  getAniCli,
-} from "@/renderer/lib/ani-cli-bridge";
-import {
   SHOW_DETAILS_FETCH_CONCURRENCY,
   mergeShowThumbnailsFromShowDetails,
 } from "@/renderer/lib/fetch-show-thumbnails";
+import { AnimeSearchResult } from "@/shared/types";
 
 export function useWelcomeRecentUploads(pageSize: number) {
   const [recentAnime, setRecentAnime] = useState<AnimeSearchResult[]>([]);
@@ -17,8 +14,7 @@ export function useWelcomeRecentUploads(pageSize: number) {
   useEffect(() => {
     let cancelled = false;
     setRecentLoading(true);
-    /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-    void getAniCli()
+    window.aniCli
       .getRecent(1, pageSize)
       .then(
         (res: { items: AnimeSearchResult[]; hasMore: boolean }) => {
@@ -31,7 +27,6 @@ export function useWelcomeRecentUploads(pageSize: number) {
       .finally(() => {
         if (!cancelled) setRecentLoading(false);
       });
-    /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
     return () => {
       cancelled = true;
     };

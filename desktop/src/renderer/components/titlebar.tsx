@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 
 import { MacTitlebar } from "./titlebar-mac";
 import { WindowsTitlebar } from "./titlebar-windows";
-import { getApp } from "@/renderer/lib/app-bridge";
 
 export function Titlebar({
   children,
@@ -14,7 +13,7 @@ export function Titlebar({
   const [os, setOs] = useState<string | null>(null);
 
   useEffect(() => {
-    void getApp()
+    window.app
       .os()
       .then(setOs)
       .catch(() => setOs(null));

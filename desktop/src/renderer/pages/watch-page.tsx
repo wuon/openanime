@@ -10,8 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/renderer/components/ui/select";
-import { type ShowDetails, getAniCli } from "@/renderer/lib/ani-cli-bridge";
-import { getRecentlyWatched } from "@/renderer/lib/recently-watched-bridge";
+import { ShowDetails } from "@/shared/types";
 
 /** How many automatic reconnects after a playback error before showing the manual overlay. */
 const MAX_AUTO_RECONNECT = 5;
@@ -70,15 +69,14 @@ export function WatchPage() {
       setError(null);
       setPlaybackError(null);
       try {
-        const aniCli = getAniCli();
-        const { url, referer } = await aniCli.getStreamUrl(anime.id, ep, anime.mode);
-        const base = await aniCli.getStreamProxyBaseUrl();
+        const { url, referer } = await window.aniCli.getStreamUrl(anime.id, ep, anime.mode);
+        const base = await window.aniCli.getStreamProxyBaseUrl();
         const urlWithProxy = `${base}/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
         setPlayUrl(urlWithProxy);
         setStreamRevision((r) => r + 1);
         setCurrentEpisode(ep);
         try {
-          await getRecentlyWatched().record(anime.id, ep, anime.mode);
+          await window.recentlyWatched.record(anime.id, ep, anime.mode);
         } catch {
           // Ignore - recording is best-effort
         }
@@ -104,12 +102,11 @@ export function WatchPage() {
     }
     let cancelled = false;
     setLoading(true);
-    const aniCli = getAniCli();
     const initialEpisodes = state.episodes ?? [];
     void Promise.all([
-      aniCli.getShowDetails(state.anime.id),
+      window.aniCli.getShowDetails(state.anime.id),
       initialEpisodes.length === 0
-        ? aniCli.getEpisodes(state.anime.id, state.anime.mode)
+        ? window.aniCli.getEpisodes(state.anime.id, state.anime.mode)
         : Promise.resolve(initialEpisodes),
     ])
       .then(async ([d, epList]) => {

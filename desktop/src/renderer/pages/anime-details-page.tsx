@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { Button } from "@/renderer/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/renderer/components/ui/tabs";
-import { type AnimeSearchResult, type ShowDetails, getAniCli } from "@/renderer/lib/ani-cli-bridge";
+import { AnimeSearchResult, ShowDetails } from "@/shared/types";
 
 type EpisodesState =
   | { status: "idle" }
@@ -51,13 +51,12 @@ export function AnimeDetailsPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const aniCli = getAniCli();
     setEpisodesByMode({ sub: { status: "loading" }, dub: { status: "loading" } });
 
     void Promise.allSettled([
-      aniCli.getShowDetails(id),
-      aniCli.getEpisodes(id, "sub"),
-      aniCli.getEpisodes(id, "dub"),
+      window.aniCli.getShowDetails(id),
+      window.aniCli.getEpisodes(id, "sub"),
+      window.aniCli.getEpisodes(id, "dub"),
     ])
       .then(([detailsResult, subResult, dubResult]) => {
         if (cancelled) return;

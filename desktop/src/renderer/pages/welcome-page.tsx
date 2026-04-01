@@ -11,13 +11,12 @@ import { useDebouncedValue } from "@/renderer/hooks/use-debounced-value";
 import { useWelcomeRecentUploads } from "@/renderer/hooks/use-welcome-recent-uploads";
 import { useWelcomeRecentlyWatched } from "@/renderer/hooks/use-welcome-recently-watched";
 import { useWelcomeSearch } from "@/renderer/hooks/use-welcome-search";
-import { type AnimeSearchResult as AnimeSearchResultType } from "@/renderer/lib/ani-cli-bridge";
-import { type RecentlyWatchedEntry } from "@/renderer/lib/recently-watched-bridge";
+import { AnimeSearchResult, RecentlyWatchedEntry } from "@/shared/types";
 
 const SEARCH_DEBOUNCE_MS = 500;
 const RECENT_PAGE_SIZE = 12;
 
-function getAvailabilityLabel(anime: AnimeSearchResultType): string {
+function getAvailabilityLabel(anime: AnimeSearchResult): string {
   const hasSub = anime.hasSub ?? anime.mode === "sub";
   const hasDub = anime.hasDub ?? anime.mode === "dub";
 
@@ -47,7 +46,7 @@ export function WelcomePage() {
   }, []);
 
   const openSearchResult = useCallback(
-    (anime: AnimeSearchResultType) => {
+    (anime: AnimeSearchResult) => {
       navigate(`/anime/${anime.id}`, {
         state: { anime },
       });
@@ -56,7 +55,7 @@ export function WelcomePage() {
   );
 
   const openRecentAnime = useCallback(
-    (anime: AnimeSearchResultType) => {
+    (anime: AnimeSearchResult) => {
       navigate("/watch", {
         state: {
           anime: { id: anime.id, name: anime.name, mode: anime.mode },

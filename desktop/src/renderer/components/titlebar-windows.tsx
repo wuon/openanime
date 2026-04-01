@@ -1,14 +1,12 @@
 import { cn } from "@/renderer/lib/utils";
 import React, { useEffect, useState } from "react";
-import { Maximize2, Minimize, Minimize2, Minus, Square, X } from "lucide-react";
+import { Minus, Square, X } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import LogoRoundedSquareLight from "@/renderer/assets/logo-rounded-square-light.svg";
 import LogoRoundedSquare from "@/renderer/assets/logo-rounded-square.svg";
 
-import { ThemePicker } from "./theme-picker";
 import { Button } from "./ui/button";
-import { getWindowControls } from "@/renderer/lib/window-controls-bridge";
 
 export function WindowsTitlebar({
   children,
@@ -22,18 +20,14 @@ export function WindowsTitlebar({
 
   const isHomePage = location.pathname === "/";
 
-  const windowControls = getWindowControls();
-
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
-    void windowControls
+    window.windowControls
       .isMaximized()
       .then(setIsMaximized)
       .catch(() => setIsMaximized(false));
-  }, [windowControls]);
-
-  const ExpandIcon = isMaximized ? Minimize2 : Maximize2;
+  }, []);
 
   return (
     <div className={cn("flex w-screen min-h-12 fixed z-10 bg-background draglayer", className)}>
@@ -69,7 +63,7 @@ export function WindowsTitlebar({
               variant="ghost"
               size="icon"
               className="h-7 w-7 clickable"
-              onClick={() => void windowControls.minimize()}
+              onClick={() => void window.windowControls.minimize()}
               aria-label="Minimize window"
             >
               <Minus className="h-4 w-4" />
@@ -80,7 +74,7 @@ export function WindowsTitlebar({
               variant="ghost"
               size="icon"
               className="h-7 w-7 clickable"
-              onClick={() => void windowControls.toggleMaximize().then(setIsMaximized)}
+              onClick={() => void window.windowControls.toggleMaximize().then(setIsMaximized)}
               aria-label={isMaximized ? "Restore window" : "Maximize window"}
             >
               <Square className="h-4 w-4" />
@@ -91,7 +85,7 @@ export function WindowsTitlebar({
               variant="ghost"
               size="icon"
               className="h-7 w-7 clickable hover:bg-red-500"
-              onClick={() => void windowControls.close()}
+              onClick={() => void window.windowControls.close()}
               aria-label="Close window"
             >
               <X className="h-4 w-4" />

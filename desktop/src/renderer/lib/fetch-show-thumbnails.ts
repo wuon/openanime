@@ -1,6 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
 
-import { getAniCli } from "@/renderer/lib/ani-cli-bridge";
 import { forEachWithConcurrency } from "@/renderer/lib/for-each-with-concurrency";
 
 /** Each call hits the network; cap parallel work so the welcome screen stays responsive. */
@@ -18,11 +17,10 @@ export async function mergeShowThumbnailsFromShowDetails<T extends { id: string 
   cancelled: () => boolean
 ): Promise<void> {
   if (toFetch.length === 0) return;
-  const aniCli = getAniCli();
   await forEachWithConcurrency(toFetch, concurrency, async (anime) => {
     if (cancelled()) return;
     try {
-      const details = await aniCli.getShowDetails(anime.id);
+      const details = await window.aniCli.getShowDetails(anime.id);
       if (cancelled()) return;
       setMap((prev) =>
         prev[anime.id] !== undefined ? prev : { ...prev, [anime.id]: details.thumbnail ?? null }
@@ -46,11 +44,10 @@ export async function mergeShowDetailsByAnimeId(
   cancelled: () => boolean
 ): Promise<void> {
   if (animeIds.length === 0) return;
-  const aniCli = getAniCli();
   await forEachWithConcurrency(animeIds, concurrency, async (animeId) => {
     if (cancelled()) return;
     try {
-      const details = await aniCli.getShowDetails(animeId);
+      const details = await window.aniCli.getShowDetails(animeId);
       if (cancelled()) return;
       setDetails((prev) =>
         prev[animeId] !== undefined
