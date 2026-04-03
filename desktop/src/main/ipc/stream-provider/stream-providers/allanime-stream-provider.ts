@@ -2,7 +2,8 @@
  * The following provider is a typescript port of the original allanime stream provider from pystardust/ani-cli.
  * See https://github.com/pystardust/ani-cli (allanime stream provider).
  */
-import { StreamProvider, StreamUrlResult } from "./stream-provider";
+import { Episode, ShowSearchResult } from "@/shared/types";
+import { StreamMode, StreamProvider, StreamUrlResult } from "./stream-provider";
 
 const ALLANIME_REFERER = "https://allmanga.to";
 const ALLANIME_BASE = "allanime.day";
@@ -12,6 +13,86 @@ const USER_AGENT =
 const IS_DEV = process.env.NODE_ENV !== "production";
 
 const EPISODE_EMBED_GQL = `query ($showId: String!, $translationType: VaildTranslationTypeEnumType!, $episodeString: String!) { episode( showId: $showId translationType: $translationType episodeString: $episodeString ) { episodeString sourceUrls } }`;
+const RECENT_UPLOADS_GQL = `
+  query (
+    $search: SearchInput
+    $limit: Int
+    $page: Int
+    $countryOrigin: VaildCountryOriginEnumType
+  ) {
+    shows(
+      search: $search
+      limit: $limit
+      page: $page
+      countryOrigin: $countryOrigin
+    ) {
+      edges {
+        _id
+        aniListId
+        name
+        englishName
+        nativeName
+        thumbnail
+        availableEpisodes
+      }
+    }
+  }
+`;
+
+const SEARCH_GQL = `
+  query (
+    $search: SearchInput
+    $limit: Int
+    $countryOrigin: VaildCountryOriginEnumType
+  ) {
+    shows(
+      search: $search
+      limit: $limit
+      countryOrigin: $countryOrigin
+    ) {
+      edges {
+        _id
+        aniListId
+        name
+        availableEpisodes
+        score
+        status
+        thumbnail
+        type
+        englishName
+        nativeName
+        episodeDuration
+      }
+    }
+  }
+`;
+
+
+interface GqlShowEdge {
+  _id: string;
+  aniListId?: string;
+  name?: string;
+  englishName?: string;
+  nativeName?: string;
+  thumbnail?: string;
+  availableEpisodes?: {
+    sub?: number;
+    dub?: number;
+    raw?: number;
+  };
+  score?: number;
+  status?: string;
+  type?: string;
+  episodeDuration?: number;
+}
+
+interface GqlRecentUploadsResponse {
+  data?: {
+    shows?: {
+      edges?: GqlShowEdge[];
+    };
+  };
+}
 
 const OBFUSCATED_DECODE_TABLE: Record<string, string> = {
   "79": "A",
@@ -156,6 +237,14 @@ function logStep(label: string, startedAt: number, extra?: string): void {
   const durationMs = Date.now() - startedAt;
   const suffix = extra ? ` | ${extra}` : "";
   console.info(`[allanime-stream] ${label} (${durationMs}ms)${suffix}`);
+}
+
+function getEpisodeCount(edge: GqlShowEdge, mode: StreamMode): number {
+  const ep = edge.availableEpisodes?.[mode];
+  if (ep == null) return 0;
+  if (Array.isArray(ep)) return ep.length;
+  if (typeof ep === "number") return ep;
+  return 0;
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -457,5 +546,97 @@ export class AllAnimeStreamProvider implements StreamProvider {
       url: best.url,
       referer: best.referer,
     };
+  }
+
+  async getRecentUploads(page: number, limit = 12, mode: StreamMode = "sub"): Promise<Episode[]> {
+    const variables = {
+      search: {},
+      limit,
+      page: Math.max(1, page),
+      translationType: mode,
+      countryOrigin: "ALL",
+    };
+  
+    const url = `${ALLANIME_API}/api?variables=${encodeURIComponent(JSON.stringify(variables))}&query=${encodeURIComponent(RECENT_UPLOADS_GQL)}`;
+  
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Referer: ALLANIME_REFERER,
+        "User-Agent": USER_AGENT,
+      },
+    });
+  
+    if (!res.ok) {
+      throw new Error(`allanime API error: ${res.status} ${res.statusText}`);
+    }
+  
+    const json = (await res.json()) as GqlRecentUploadsResponse;
+    const edges = json.data?.shows?.edges ?? [];
+
+    const episodes = edges.map((edge) => {
+        return {
+          id: edge.aniListId,
+          providerId: edge._id,
+          title: {
+            english: edge.englishName,
+            romanji: edge.name,
+            native: edge.nativeName,
+          },
+          thumbnail: edge.thumbnail,
+          index: getEpisodeCount(edge, mode),
+          mode,
+        };
+    });
+
+    return episodes;
+  }
+
+  async search(query: string): Promise<ShowSearchResult[]> {
+    const variables = {
+      search: {
+        query,
+      },
+      limit: 40,
+      page: 1,
+      countryOrigin: "ALL",
+    };
+
+    const url = `${ALLANIME_API}/api?variables=${encodeURIComponent(JSON.stringify(variables))}&query=${encodeURIComponent(SEARCH_GQL)}`;
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Referer: ALLANIME_REFERER,
+        "User-Agent": USER_AGENT,
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`allanime API error: ${res.status} ${res.statusText}`);
+    }
+
+    const json = (await res.json()) as GqlRecentUploadsResponse;
+    const edges = json.data?.shows?.edges ?? [];
+
+    const shows = edges.map((edge) => {
+      return {
+        id: edge.aniListId,
+        providerId: edge._id,
+        title: {
+          english: edge.englishName,
+          romanji: edge.name,
+          native: edge.nativeName,
+        },
+        thumbnail: edge.thumbnail,
+        availableEpisodes: edge.availableEpisodes,
+        score: edge.score,
+        status: edge.status,
+        type: edge.type,
+        episodeDuration: edge.episodeDuration,
+      };
+    });
+
+    return shows;
   }
 }

@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { Button } from "@/renderer/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/renderer/components/ui/tabs";
-import { AnimeSearchResult, ShowDetails } from "@/shared/types";
+import { Show, ShowDetails } from "@/shared/types";
 
 type EpisodesState =
   | { status: "idle" }
@@ -13,7 +13,7 @@ type EpisodesState =
   | { status: "error"; message: string };
 
 interface LocationState {
-  anime?: AnimeSearchResult;
+  anime?: Show;
 }
 
 type AnimeMode = "sub" | "dub";

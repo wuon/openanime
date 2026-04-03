@@ -8,17 +8,17 @@ import { HorizontalCarousel } from "@/renderer/components/horizontal-carousel";
 import { Button } from "@/renderer/components/ui/button";
 import { Input } from "@/renderer/components/ui/input";
 import { useDebouncedValue } from "@/renderer/hooks/use-debounced-value";
-import { useWelcomeRecentUploads } from "@/renderer/hooks/use-welcome-recent-uploads";
+import { useWelcomeRecentlyUploaded } from "@/renderer/hooks/use-welcome-recent-uploads";
 import { useWelcomeRecentlyWatched } from "@/renderer/hooks/use-welcome-recently-watched";
 import { useWelcomeSearch } from "@/renderer/hooks/use-welcome-search";
-import { AnimeSearchResult, RecentlyWatchedEntry } from "@/shared/types";
+import { Episode, RecentlyWatchedEntry, ShowSearchResult } from "@/shared/types";
 
 const SEARCH_DEBOUNCE_MS = 500;
 const RECENT_PAGE_SIZE = 12;
 
-function getAvailabilityLabel(anime: AnimeSearchResult): string {
-  const hasSub = anime.hasSub ?? anime.mode === "sub";
-  const hasDub = anime.hasDub ?? anime.mode === "dub";
+function getAvailabilityLabel(show: ShowSearchResult): string {
+  const hasSub = show.availableEpisodes?.sub ?? 0 > 0;
+  const hasDub = show.availableEpisodes?.dub ?? 0 > 0;
 
   if (hasSub && hasDub) return "sub / dub";
   if (hasDub) return "dub";
@@ -30,9 +30,8 @@ export function WelcomePage() {
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
 
-  const { results, loading, error, searchThumbnails } = useWelcomeSearch(debouncedQuery);
-  const { recentAnime, recentLoading, recentThumbnails } =
-    useWelcomeRecentUploads(RECENT_PAGE_SIZE);
+  const { results: searchResults, loading, error } = useWelcomeSearch(debouncedQuery);
+  const { recentUploads, recentUploadsLoading } = useWelcomeRecentlyUploaded(RECENT_PAGE_SIZE);
   const { recentlyWatched, recentlyWatchedLoading, recentlyWatchedDetails, clearRecentlyWatched } =
     useWelcomeRecentlyWatched();
 
@@ -45,8 +44,8 @@ export function WelcomePage() {
     }
   }, []);
 
-  const openSearchResult = useCallback(
-    (anime: AnimeSearchResult) => {
+  const openShow = useCallback(
+    (anime: ShowSearchResult) => {
       navigate(`/anime/${anime.id}?providerId=${encodeURIComponent(anime.providerId)}`, {
         state: { anime },
       });
@@ -55,13 +54,22 @@ export function WelcomePage() {
   );
 
   const openRecentAnime = useCallback(
-    (anime: AnimeSearchResult) => {
+    (episode: Episode) => {
+      const name =
+        episode.title.english ??
+        episode.title.romanji ??
+        episode.title.native ??
+        episode.providerId;
       navigate("/watch", {
         state: {
-          anime: { id: anime.id, providerId: anime.providerId, name: anime.name, mode: anime.mode },
+          anime: {
+            id: episode.id,
+            providerId: episode.providerId,
+            name,
+            mode: episode.mode,
+          },
           episodes: [],
-          currentEpisode: "1",
-          preferLatest: true,
+          currentEpisode: String(episode.index),
         },
       });
     },
@@ -131,22 +139,26 @@ export function WelcomePage() {
         </p>
       )}
 
-      {results.length > 0 && (
+      {searchResults.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="text-lg font-semibold">Search results</h2>
           <HorizontalCarousel
-            items={results.map((anime) => ({
-              id: anime.id,
-              coverUrl: searchThumbnails[anime.id] ?? null,
-              title: anime.name,
-              subtitle: `Episode ${anime.episodeCount} · ${getAvailabilityLabel(anime)}`,
-              onClick: () => openSearchResult(anime),
+            items={searchResults.map((show) => ({
+              id: show.id,
+              coverUrl: show.thumbnail,
+              title:
+                show.title.english ??
+                show.title.romanji ??
+                show.title.native ??
+                show.providerId,
+              subtitle: `Episode ${show.availableEpisodes?.sub ?? 0} · ${getAvailabilityLabel(show)}`,
+              onClick: () => openShow(show),
             }))}
           />
         </section>
       )}
 
-      {!loading && results.length === 0 && debouncedQuery.trim() && !error && (
+      {!loading && searchResults.length === 0 && debouncedQuery.trim() && !error && (
         <p className="text-muted-foreground text-sm">No results found.</p>
       )}
 
@@ -185,16 +197,20 @@ export function WelcomePage() {
           </section>
           <section className="flex flex-col gap-3">
             <h2 className="text-lg font-semibold">Recently uploaded</h2>
-            {recentLoading ? (
+            {recentUploadsLoading ? (
               <p className="text-muted-foreground text-sm">Loading…</p>
-            ) : recentAnime.length > 0 ? (
+            ) : recentUploads.length > 0 ? (
               <HorizontalCarousel
-                items={recentAnime.map((anime) => ({
-                  id: anime.id,
-                  coverUrl: recentThumbnails[anime.id] ?? null,
-                  title: anime.name,
-                  subtitle: `Episode ${anime.episodeCount} · ${getAvailabilityLabel(anime)}`,
-                  onClick: () => openRecentAnime(anime),
+                items={recentUploads.map((episode) => ({
+                  id: `${episode.id}-${episode.index}-${episode.mode}`,
+                  coverUrl: episode.thumbnail,
+                  title:
+                    episode.title.english ??
+                    episode.title.romanji ??
+                    episode.title.native ??
+                    episode.providerId,
+                  subtitle: `Episode ${episode.index} · ${episode.mode}`,
+                  onClick: () => openRecentAnime(episode),
                 }))}
               />
             ) : (

@@ -1,56 +1,32 @@
 import { useEffect, useState } from "react";
 
-import {
-  SHOW_DETAILS_FETCH_CONCURRENCY,
-  mergeShowThumbnailsFromShowDetails,
-} from "@/renderer/lib/fetch-show-thumbnails";
-import { AnimeSearchResult } from "@/shared/types";
+import { Episode } from "@/shared/types";
 
-export function useWelcomeRecentUploads(pageSize: number) {
-  const [recentAnime, setRecentAnime] = useState<AnimeSearchResult[]>([]);
-  const [recentLoading, setRecentLoading] = useState(true);
-  const [recentThumbnails, setRecentThumbnails] = useState<Record<string, string | null>>({});
+export function useWelcomeRecentlyUploaded(pageSize: number) {
+  const [recentUploads, setRecentUploads] = useState<Episode[]>([]);
+  const [recentUploadsLoading, setRecentUploadsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    setRecentLoading(true);
+    setRecentUploadsLoading(true);
     window.streamProvider
-      .getRecent(1, pageSize)
+      .getRecentUploads(1, pageSize)
       .then(
-        (res: { items: AnimeSearchResult[]; hasMore: boolean }) => {
-          if (!cancelled) setRecentAnime(res.items);
+        (episodes: Episode[]) => {
+          if (cancelled) return;
+          setRecentUploads(episodes);
         },
         () => {
-          if (!cancelled) setRecentAnime([]);
+          if (!cancelled) setRecentUploads([]);
         }
       )
       .finally(() => {
-        if (!cancelled) setRecentLoading(false);
+        if (!cancelled) setRecentUploadsLoading(false);
       });
     return () => {
       cancelled = true;
     };
   }, [pageSize]);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (recentAnime.length === 0) return;
-    const toFetch = recentAnime.filter((a) => recentThumbnails[a.id] === undefined);
-    if (toFetch.length === 0) return;
-
-    void (async () => {
-      await mergeShowThumbnailsFromShowDetails(
-        toFetch,
-        SHOW_DETAILS_FETCH_CONCURRENCY,
-        setRecentThumbnails,
-        () => cancelled
-      );
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [recentAnime]);
-
-  return { recentAnime, recentLoading, recentThumbnails };
+  return { recentUploads, recentUploadsLoading };
 }

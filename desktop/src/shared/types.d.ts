@@ -8,14 +8,49 @@ interface ThemeContext {
   current: () => Promise<"dark" | "light" | "system">;
 }
 
-interface AnimeSearchResult {
+type StreamMode = "sub" | "dub";
+
+interface Show {
   id: string;
   providerId: string;
   name: string;
   episodeCount: number;
-  mode: "sub" | "dub";
+  mode: StreamMode;
   hasSub?: boolean;
   hasDub?: boolean;
+}
+
+interface ShowSearchResult {
+  id: string;
+  providerId: string;
+  title: {
+    english?: string;
+    romanji?: string;
+    native?: string;
+  };
+  thumbnail: string | null;
+  availableEpisodes?: {
+    sub?: number;
+    dub?: number;
+    raw?: number;
+  };
+  score?: number;
+  status?: string;
+  type?: string;
+  episodeDuration?: number;
+}
+
+interface Episode {
+  id: string;
+  providerId: string;
+  title: {
+    english?: string;
+    romanji?: string;
+    native?: string;
+  };
+  thumbnail: string | null;
+  index: number;
+  mode: StreamMode;
 }
 
 interface StreamUrlResult {
@@ -71,7 +106,7 @@ export interface UrlOpenerContext {
 }
 
 interface StreamProviderContext {
-  search: (query: string) => Promise<AnimeSearchResult[]>;
+  search: (query: string) => Promise<ShowSearchResult[]>;
   getEpisodes: (providerId: string, mode?: "sub" | "dub") => Promise<string[]>;
   getStreamUrl: (
     id: string | null,
@@ -81,13 +116,10 @@ interface StreamProviderContext {
   ) => Promise<StreamUrlResult>;
   getStreamProxyBaseUrl: () => Promise<string>;
   getShowDetails: (providerId: string) => Promise<ShowDetails>;
-  getRecent: (
+  getRecentUploads: (
     page: number,
     limit?: number
-  ) => Promise<{
-    items: AnimeSearchResult[];
-    hasMore: boolean;
-  }>;
+  ) => Promise<Episode[]>;
 }
 
 declare global {

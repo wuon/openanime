@@ -1,16 +1,11 @@
 import { useEffect, useState } from "react";
 
-import {
-  SHOW_DETAILS_FETCH_CONCURRENCY,
-  mergeShowThumbnailsFromShowDetails,
-} from "@/renderer/lib/fetch-show-thumbnails";
-import { AnimeSearchResult } from "@/shared/types";
+import { ShowSearchResult } from "@/shared/types";
 
 export function useWelcomeSearch(debouncedQuery: string) {
-  const [results, setResults] = useState<AnimeSearchResult[]>([]);
+  const [results, setResults] = useState<ShowSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchThumbnails, setSearchThumbnails] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
     const q = debouncedQuery.trim();
@@ -23,7 +18,6 @@ export function useWelcomeSearch(debouncedQuery: string) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    setSearchThumbnails({});
     window.streamProvider
       .search(q)
       .then((list) => {
@@ -40,25 +34,5 @@ export function useWelcomeSearch(debouncedQuery: string) {
     };
   }, [debouncedQuery]);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (results.length === 0) return;
-    const toFetch = results.filter((a) => searchThumbnails[a.id] === undefined);
-    if (toFetch.length === 0) return;
-
-    void (async () => {
-      await mergeShowThumbnailsFromShowDetails(
-        toFetch,
-        SHOW_DETAILS_FETCH_CONCURRENCY,
-        setSearchThumbnails,
-        () => cancelled
-      );
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [results]);
-
-  return { results, loading, error, searchThumbnails };
+  return { results, loading, error };
 }

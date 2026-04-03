@@ -2,22 +2,13 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import {
   STREAM_PROVIDER_EPISODES_CHANNEL,
-  STREAM_PROVIDER_RECENT_CHANNEL,
+  STREAM_PROVIDER_RECENT_UPLOADS_CHANNEL,
   STREAM_PROVIDER_SEARCH_CHANNEL,
   STREAM_PROVIDER_SHOW_DETAILS_CHANNEL,
   STREAM_PROVIDER_STREAM_PROXY_BASE_CHANNEL,
   STREAM_PROVIDER_STREAM_URL_CHANNEL,
 } from "./stream-provider-channels";
-
-export interface AnimeSearchResult {
-  id: string;
-  providerId: string;
-  name: string;
-  episodeCount: number;
-  mode: "sub" | "dub";
-  hasSub?: boolean;
-  hasDub?: boolean;
-}
+import { Episode, ShowSearchResult } from "@/shared/types";
 
 export interface StreamUrlResult {
   url: string;
@@ -27,7 +18,7 @@ export interface StreamUrlResult {
 export function exposeStreamProviderContext() {
   contextBridge.exposeInMainWorld("streamProvider", {
     search: (query: string) =>
-      ipcRenderer.invoke(STREAM_PROVIDER_SEARCH_CHANNEL, query) as Promise<AnimeSearchResult[]>,
+      ipcRenderer.invoke(STREAM_PROVIDER_SEARCH_CHANNEL, query) as Promise<ShowSearchResult[]>,
     getEpisodes: (providerId: string, mode?: "sub" | "dub") =>
       ipcRenderer.invoke(STREAM_PROVIDER_EPISODES_CHANNEL, providerId, mode ?? "sub") as Promise<
         string[]
@@ -56,10 +47,7 @@ export function exposeStreamProviderContext() {
         type: string;
         description?: string | null;
       }>,
-    getRecent: (page: number, limit?: number) =>
-      ipcRenderer.invoke(STREAM_PROVIDER_RECENT_CHANNEL, page, limit) as Promise<{
-        items: AnimeSearchResult[];
-        hasMore: boolean;
-      }>,
+    getRecentUploads: (page: number, limit?: number) =>
+      ipcRenderer.invoke(STREAM_PROVIDER_RECENT_UPLOADS_CHANNEL, page, limit) as Promise<Episode[]>,
   });
 }
