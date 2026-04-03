@@ -46,7 +46,7 @@ export function WelcomePage() {
 
   const openShow = useCallback(
     (anime: ShowSearchResult) => {
-      navigate(`/anime/${anime.id}?providerId=${encodeURIComponent(anime.providerId)}`, {
+      navigate(`/show/${anime.id}?providerId=${encodeURIComponent(anime.providerId)}`, {
         state: { anime },
       });
     },

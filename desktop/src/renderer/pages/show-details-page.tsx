@@ -20,7 +20,7 @@ type AnimeMode = "sub" | "dub";
 
 const MODES: AnimeMode[] = ["sub", "dub"];
 
-export function AnimeDetailsPage() {
+export function ShowDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
