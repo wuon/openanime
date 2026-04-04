@@ -6,8 +6,10 @@ import { HashRouter, Route, Routes } from "react-router-dom";
 import { initI18n } from "@/renderer/helpers/i18n/i18n";
 import { updateAppLanguage } from "@/renderer/helpers/i18n/language-helpers";
 import { syncThemeWithLocal } from "@/renderer/helpers/theme/theme-helper";
-import BaseLayout from "@/renderer/layouts/base-layout";
+import SidebarLayout from "@/renderer/layouts/sidebar-layout";
 import { PlayerPage } from "@/renderer/pages/player-page";
+import { SearchPage } from "@/renderer/pages/search-page";
+import { SettingsPage } from "@/renderer/pages/settings-page";
 import { ShowDetailsPage } from "@/renderer/pages/show-details-page";
 import { WatchPage } from "@/renderer/pages/watch-page";
 import { WelcomePage } from "@/renderer/pages/welcome-page";
@@ -23,8 +25,10 @@ export default function App() {
   return (
     <HashRouter>
       <Routes>
-        <Route element={<BaseLayout />}>
+        <Route element={<SidebarLayout />}>
           <Route path="/" element={<WelcomePage />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="/show/:id" element={<ShowDetailsPage />} />
           <Route path="/watch" element={<WatchPage />} />
           <Route path="/player" element={<PlayerPage />} />

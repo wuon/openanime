@@ -3,6 +3,7 @@
  * See https://github.com/pystardust/ani-cli (allanime stream provider).
  */
 import { Episode, ShowSearchResult } from "@/shared/types";
+
 import { StreamMode, StreamProvider, StreamUrlResult } from "./stream-provider";
 
 const ALLANIME_REFERER = "https://allmanga.to";
@@ -62,11 +63,11 @@ const SEARCH_GQL = `
         englishName
         nativeName
         episodeDuration
+        season
       }
     }
   }
 `;
-
 
 interface GqlShowEdge {
   _id: string;
@@ -84,9 +85,13 @@ interface GqlShowEdge {
   status?: string;
   type?: string;
   episodeDuration?: number;
+  season?: {
+    quarter?: string;
+    year?: number;
+  };
 }
 
-interface GqlRecentUploadsResponse {
+interface GqlSearchResponse {
   data?: {
     shows?: {
       edges?: GqlShowEdge[];
@@ -556,9 +561,9 @@ export class AllAnimeStreamProvider implements StreamProvider {
       translationType: mode,
       countryOrigin: "ALL",
     };
-  
+
     const url = `${ALLANIME_API}/api?variables=${encodeURIComponent(JSON.stringify(variables))}&query=${encodeURIComponent(RECENT_UPLOADS_GQL)}`;
-  
+
     const res = await fetch(url, {
       method: "GET",
       headers: {
@@ -566,27 +571,27 @@ export class AllAnimeStreamProvider implements StreamProvider {
         "User-Agent": USER_AGENT,
       },
     });
-  
+
     if (!res.ok) {
       throw new Error(`allanime API error: ${res.status} ${res.statusText}`);
     }
-  
-    const json = (await res.json()) as GqlRecentUploadsResponse;
+
+    const json = (await res.json()) as GqlSearchResponse;
     const edges = json.data?.shows?.edges ?? [];
 
     const episodes = edges.map((edge) => {
-        return {
-          id: edge.aniListId,
-          providerId: edge._id,
-          title: {
-            english: edge.englishName,
-            romanji: edge.name,
-            native: edge.nativeName,
-          },
-          thumbnail: edge.thumbnail,
-          index: getEpisodeCount(edge, mode),
-          mode,
-        };
+      return {
+        id: edge.aniListId,
+        providerId: edge._id,
+        title: {
+          english: edge.englishName,
+          romanji: edge.name,
+          native: edge.nativeName,
+        },
+        thumbnail: edge.thumbnail,
+        index: getEpisodeCount(edge, mode),
+        mode,
+      };
     });
 
     return episodes;
@@ -597,7 +602,7 @@ export class AllAnimeStreamProvider implements StreamProvider {
       search: {
         query,
       },
-      limit: 40,
+      limit: 36,
       page: 1,
       countryOrigin: "ALL",
     };
@@ -616,7 +621,7 @@ export class AllAnimeStreamProvider implements StreamProvider {
       throw new Error(`allanime API error: ${res.status} ${res.statusText}`);
     }
 
-    const json = (await res.json()) as GqlRecentUploadsResponse;
+    const json = (await res.json()) as GqlSearchResponse;
     const edges = json.data?.shows?.edges ?? [];
 
     const shows = edges.map((edge) => {
@@ -634,6 +639,7 @@ export class AllAnimeStreamProvider implements StreamProvider {
         status: edge.status,
         type: edge.type,
         episodeDuration: edge.episodeDuration,
+        season: edge.season,
       };
     });
 

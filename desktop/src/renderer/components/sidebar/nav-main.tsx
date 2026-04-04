@@ -1,11 +1,13 @@
+import { Home, type LucideIcon, Search, Settings } from "lucide-react";
+import React from "react";
+import { Link, useLocation } from "react-router-dom";
+
 import {
   SidebarGroup,
   SidebarMenu,
   SidebarMenuButton,
+  SidebarMenuItem,
 } from "@/renderer/components/ui/sidebar";
-import { Home, type LucideIcon, PiggyBank, Receipt, Settings, Tv, WalletCards } from "lucide-react";
-import React from "react";
-import { Link, useLocation } from "react-router-dom";
 
 type NavItem = {
   title: string;
@@ -20,24 +22,9 @@ const navbarItems: NavItem[] = [
     icon: Home,
   },
   {
-    title: "Anime",
-    href: "/anime",
-    icon: Tv,
-  },
-  {
-    title: "Accounts",
-    href: "/accounts",
-    icon: PiggyBank,
-  },
-  {
-    title: "Transactions",
-    href: "/transactions",
-    icon: Receipt,
-  },
-  {
-    title: "Categories",
-    href: "/categories",
-    icon: WalletCards,
+    title: "Search",
+    href: "/search",
+    icon: Search,
   },
   {
     title: "Settings",
@@ -53,12 +40,14 @@ export function NavMain() {
     const isActive = location.pathname === item.href;
 
     return (
-      <SidebarMenuButton key={item.title} asChild isActive={isActive}>
-        <Link to={item.href}>
-          <item.icon />
-          <span>{item.title}</span>
-        </Link>
-      </SidebarMenuButton>
+      <SidebarMenuItem key={item.href}>
+        <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+          <Link to={item.href}>
+            <item.icon />
+            <span>{item.title}</span>
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
     );
   };
 

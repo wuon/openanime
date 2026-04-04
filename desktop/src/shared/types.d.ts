@@ -38,6 +38,10 @@ interface ShowSearchResult {
   status?: string;
   type?: string;
   episodeDuration?: number;
+  season?: {
+    quarter?: string;
+    year?: number;
+  };
 }
 
 interface Episode {
@@ -101,12 +105,7 @@ interface RecentlyWatchedEntry {
 }
 
 interface RecentlyWatchedContext {
-  record: (
-    id: string,
-    providerId: string,
-    episode: string,
-    mode?: "sub" | "dub"
-  ) => Promise<void>;
+  record: (id: string, providerId: string, episode: string, mode?: "sub" | "dub") => Promise<void>;
   read: () => Promise<RecentlyWatchedEntry[]>;
   clear: () => Promise<void>;
 }
@@ -141,10 +140,7 @@ interface StreamProviderContext {
   ) => Promise<StreamUrlResult>;
   getStreamProxyBaseUrl: () => Promise<string>;
   getShowDetails: (providerId: string) => Promise<ShowDetails>;
-  getRecentUploads: (
-    page: number,
-    limit?: number
-  ) => Promise<Episode[]>;
+  getRecentUploads: (page: number, limit?: number) => Promise<Episode[]>;
 }
 
 interface AniListContext {

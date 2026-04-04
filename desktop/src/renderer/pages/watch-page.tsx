@@ -1,6 +1,6 @@
 import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 import { Button } from "@/renderer/components/ui/button";
 import {
@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/renderer/components/ui/select";
+import { useGoBack } from "@/renderer/hooks/use-go-back";
 import { ShowDetails } from "@/shared/types";
 
 /** How many automatic reconnects after a playback error before showing the manual overlay. */
@@ -25,6 +26,7 @@ interface WatchState {
 
 export function WatchPage() {
   const location = useLocation();
+  const goBack = useGoBack();
   const state = location.state as WatchState | null;
 
   const [playUrl, setPlayUrl] = useState<string>("");
@@ -240,8 +242,8 @@ export function WatchPage() {
         <p className="text-muted-foreground">
           No anime selected. Go back and pick an episode to play.
         </p>
-        <Button asChild variant="outline">
-          <Link to="/">Back to home</Link>
+        <Button type="button" variant="outline" onClick={goBack}>
+          Go back
         </Button>
       </div>
     );
@@ -252,10 +254,8 @@ export function WatchPage() {
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="sticky top-12 z-10 flex items-center gap-3 px-4 py-2 border-b border-border shrink-0 bg-background">
-        <Button variant="ghost" size="icon" asChild>
-          <Link to="/">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
+        <Button type="button" variant="ghost" size="icon" onClick={goBack} aria-label="Back">
+          <ArrowLeft className="h-5 w-5" />
         </Button>
         <span className="text-sm font-medium truncate flex-1 min-w-0">
           {displayName} ({anime.mode === "dub" ? "Dub" : "Sub"})

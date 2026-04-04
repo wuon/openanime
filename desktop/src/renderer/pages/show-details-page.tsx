@@ -1,6 +1,6 @@
 import { ArrowLeft, Loader2, Play, Search } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { Button } from "@/renderer/components/ui/button";
 import { Input } from "@/renderer/components/ui/input";
@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/renderer/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/renderer/components/ui/tabs";
+import { useGoBack } from "@/renderer/hooks/use-go-back";
 import { useShowDetails } from "@/renderer/hooks/use-show-details";
 import { Show } from "@/shared/types";
 
@@ -30,6 +31,7 @@ export function ShowDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
+  const goBack = useGoBack();
   const state = location.state as LocationState | null;
 
   const [playingEpisode, setPlayingEpisode] = useState<string | null>(null);
@@ -97,8 +99,8 @@ export function ShowDetailsPage() {
     return (
       <div className="container flex flex-col items-center justify-center gap-4 p-8">
         <p className="text-muted-foreground">No anime selected.</p>
-        <Button asChild variant="outline">
-          <Link to="/">Back to home</Link>
+        <Button type="button" variant="outline" onClick={goBack}>
+          Back
         </Button>
       </div>
     );
@@ -109,8 +111,8 @@ export function ShowDetailsPage() {
       <div className="container flex flex-col items-center justify-center gap-4 p-8">
         <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
         <p className="text-muted-foreground text-sm">Loading…</p>
-        <Button asChild variant="outline">
-          <Link to="/">Back to home</Link>
+        <Button type="button" variant="outline" onClick={goBack}>
+          Back
         </Button>
       </div>
     );
@@ -122,8 +124,8 @@ export function ShowDetailsPage() {
         <p className="text-destructive text-sm" role="alert">
           {error}
         </p>
-        <Button asChild variant="outline">
-          <Link to="/">Back to home</Link>
+        <Button type="button" variant="outline" onClick={goBack}>
+          Back
         </Button>
       </div>
     );
@@ -177,170 +179,209 @@ export function ShowDetailsPage() {
     details?.status ?? null,
   ].filter(Boolean);
 
+  const heroImage = details?.bannerImage ?? details?.coverImage ?? null;
+
+  const heroBottomBlendGradient =
+    "linear-gradient(to bottom, transparent 36%, hsl(var(--background) / 0.35) 58%, hsl(var(--background) / 0.82) 78%, hsl(var(--background)) 100%)";
+
+  const heroLeftBlendGradient =
+    "linear-gradient(to left, transparent 36%, hsl(var(--background) / 0.35) 58%, hsl(var(--background) / 0.82) 70%, hsl(var(--background)) 100%)";
+
   return (
-    <div className="relative min-h-full overflow-y-auto bg-background">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[440px] bg-background opacity-75" />
-
-      <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-6 p-6 text-white md:p-8">
-        <div className="flex items-center">
-          <Button variant="ghost" size="icon" asChild className="text-white hover:bg-white/15">
-            <Link to="/">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-          </Button>
-        </div>
-
-        <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-          <div className="max-w-3xl space-y-4">
-            <h1 className="text-3xl font-bold leading-tight md:text-5xl text-foreground">
-              {displayName}
-            </h1>
-            {details?.description && (
-              <p className="max-w-2xl text-sm text-muted-foreground line-clamp-3 md:text-base">
-                {details.description}
-              </p>
-            )}
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              {detailMeta.map((entry) => (
-                <Badge key={entry} variant="secondary">
-                  {entry}
-                </Badge>
-              ))}
-            </div>
-            <div className="flex items-center">
-              <Button
-                type="button"
-                onClick={() => {
-                  if (episodes[0]) {
-                    playEpisode(episodes[0], episodes, activeMode);
-                  }
-                }}
-                disabled={!episodes[0]}
-                className="font-semibold"
-              >
-                <Play className="h-4 w-4 fill-current" />
-                Play - Episode {episodes[0]}
-              </Button>
-            </div>
-          </div>
-
-          {details?.coverImage && (
-            <img
-              src={details.coverImage}
-              draggable={false}
-              alt=""
-              className="rounded-xl border border-transparent/20 object-cover h-56 w-40"
+    <div className="relative mx-auto flex w-full max-w-[1600px] flex-col gap-0 p-6 md:p-8">
+      <div className="relative -mx-8 overflow-hidden -mt-8">
+        {heroImage ? (
+          <>
+            <div
+              className="absolute inset-0 bg-cover bg-center"
+              style={{ backgroundImage: `url(${heroImage})` }}
+              aria-hidden
             />
-          )}
-        </div>
-
-        <section className="mt-2 text-foreground">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="relative w-full md:max-w-md">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={episodeQuery}
-                onChange={(event) => setEpisodeQuery(event.target.value)}
-                placeholder="Search episodes..."
-                className="h-10 bg-background/90 pl-9"
-              />
-            </div>
-
-            <div className="flex w-full gap-2 md:w-auto">
-              {tabs.length > 0 && (
-                <Tabs
-                  value={activeMode}
-                  onValueChange={(value) => {
-                    if (value === "sub" || value === "dub") setActiveMode(value);
-                  }}
-                >
-                  <TabsList>
-                    {tabs.map((mode) => (
-                      <TabsTrigger key={mode} value={mode} className="capitalize">
-                        {mode}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-                </Tabs>
-              )}
-              <Select
-                value={episodeSort}
-                onValueChange={(value) => setEpisodeSort(value as EpisodeSort)}
-              >
-                <SelectTrigger className="h-10 w-[130px]">
-                  <SelectValue placeholder="Sort" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="newest">Newest</SelectItem>
-                  <SelectItem value="oldest">Oldest</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <div className="absolute inset-0 bg-black/60" aria-hidden />
+            <div
+              className="pointer-events-none absolute inset-0 z-[1]"
+              style={{ background: heroBottomBlendGradient }}
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute inset-0 z-[1]"
+              style={{ background: heroLeftBlendGradient }}
+              aria-hidden
+            />
+          </>
+        ) : (
+          <div className="absolute inset-0 bg-muted" aria-hidden />
+        )}
+        <div className="relative z-10 flex flex-col gap-6 p-6 text-white md:p-8">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={goBack}
+              className="text-white hover:bg-white/15"
+              aria-label="Back"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">Back</span>
           </div>
 
-          <div className="mt-4">
-            {isAnyEpisodesLoading && (
-              <p className="text-sm text-muted-foreground">Loading episodes…</p>
+          <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+            <div className="max-w-3xl space-y-4">
+              <h1 className="text-3xl font-bold leading-tight text-foreground md:text-5xl">
+                {displayName}
+              </h1>
+              {details?.description && (
+                <p className="line-clamp-3 max-w-2xl text-sm text-muted-foreground md:text-base">
+                  {details.description}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {detailMeta.map((entry) => (
+                  <Badge key={entry} variant="secondary">
+                    {entry}
+                  </Badge>
+                ))}
+              </div>
+              <div className="flex items-center pt-1">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (episodes[0]) {
+                      playEpisode(episodes[0], episodes, activeMode);
+                    }
+                  }}
+                  disabled={!episodes[0]}
+                  className="cursor-pointer font-semibold"
+                >
+                  <Play className="h-4 w-4 fill-current" />
+                  Play - Episode {episodes[0]}
+                </Button>
+              </div>
+            </div>
+
+            {details?.coverImage && (
+              <img
+                src={details.coverImage}
+                draggable={false}
+                alt=""
+                className="h-64 w-auto rounded-xl border-2 object-cover border-transparent/20"
+              />
             )}
-            {!isAnyEpisodesLoading && activeState.status === "error" && (
-              <p className="text-sm text-destructive">{activeState.message}</p>
+          </div>
+        </div>
+      </div>
+
+      <section className="text-foreground pt-6 md:pt-8">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="relative w-full md:max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={episodeQuery}
+              onChange={(event) => setEpisodeQuery(event.target.value)}
+              placeholder="Search episodes..."
+              className="h-10 bg-background/90 pl-9"
+            />
+          </div>
+
+          <div className="flex w-full gap-2 md:w-auto">
+            {tabs.length > 0 && (
+              <Tabs
+                value={activeMode}
+                onValueChange={(value) => {
+                  if (value === "sub" || value === "dub") setActiveMode(value);
+                }}
+              >
+                <TabsList>
+                  {tabs.map((mode) => (
+                    <TabsTrigger key={mode} value={mode} className="capitalize">
+                      {mode}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
             )}
-            {!isAnyEpisodesLoading && tabs.length === 0 && !allModesFailed && (
-              <p className="text-sm text-muted-foreground">No episodes available.</p>
-            )}
-            {!isAnyEpisodesLoading && allModesFailed && (
-              <p className="text-sm text-destructive">
-                Failed to load episodes for both sub and dub.
-              </p>
-            )}
-            {visibleEpisodeCards.length > 0 && (
-              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {visibleEpisodeCards.map((item) => {
-                  const { episode, index, thumbnail, title } = item;
-                  const isPlaying = playingEpisode === episode;
-                  return (
-                    <li key={`${activeMode}-${episode}`} className="w-full">
-                      <button
-                        type="button"
-                        onClick={() => playEpisode(episode, episodes, activeMode)}
-                        disabled={isPlaying}
-                        className="group w-full text-left focus-visible:outline-none disabled:opacity-60"
-                      >
-                        <div className="relative h-40 w-full rounded-2xl border-2 border-border p-[3px] box-border transition-all group-hover:border-primary/80 group-hover:shadow-[0_0_0_1px_rgba(129,140,248,0.7)] group-focus-visible:border-primary/80 group-focus-visible:shadow-[0_0_0_1px_rgba(129,140,248,0.7)]">
-                          <div className="relative h-full w-full overflow-hidden rounded-lg bg-muted">
-                            {thumbnail ? (
-                              <img
-                                src={thumbnail}
-                                alt=""
-                                draggable={false}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="h-full w-full bg-muted" />
+            <Select
+              value={episodeSort}
+              onValueChange={(value) => setEpisodeSort(value as EpisodeSort)}
+            >
+              <SelectTrigger className="h-10 w-[130px]">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest</SelectItem>
+                <SelectItem value="oldest">Oldest</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          {isAnyEpisodesLoading && (
+            <p className="text-sm text-muted-foreground">Loading episodes…</p>
+          )}
+          {!isAnyEpisodesLoading && activeState.status === "error" && (
+            <p className="text-sm text-destructive">{activeState.message}</p>
+          )}
+          {!isAnyEpisodesLoading && tabs.length === 0 && !allModesFailed && (
+            <p className="text-sm text-muted-foreground">No episodes available.</p>
+          )}
+          {!isAnyEpisodesLoading && allModesFailed && (
+            <p className="text-sm text-destructive">
+              Failed to load episodes for both sub and dub.
+            </p>
+          )}
+          {visibleEpisodeCards.length > 0 && (
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {visibleEpisodeCards.map((item) => {
+                const { episode, index, thumbnail, title } = item;
+                const isPlaying = playingEpisode === episode;
+                return (
+                  <li key={`${activeMode}-${episode}`} className="w-full">
+                    <button
+                      type="button"
+                      onClick={() => playEpisode(episode, episodes, activeMode)}
+                      disabled={isPlaying}
+                      className="group w-full text-left focus-visible:outline-none disabled:opacity-60"
+                    >
+                      <div className="relative h-40 w-full rounded-2xl border-2 border-border p-[3px] box-border transition-all group-hover:border-primary/80 group-hover:shadow-[0_0_0_1px_rgba(129,140,248,0.7)] group-focus-visible:border-primary/80 group-focus-visible:shadow-[0_0_0_1px_rgba(129,140,248,0.7)]">
+                        <div className="relative h-full w-full overflow-hidden rounded-lg bg-muted">
+                          {thumbnail ? (
+                            <img
+                              src={thumbnail}
+                              alt=""
+                              draggable={false}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="h-full w-full bg-muted" />
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
+                          <div className="absolute bottom-0 left-0 right-0 p-3 text-white">
+                            <Badge
+                              variant="glass"
+                              className="cursor-default hover:bg-transparent/20"
+                            >
+                              Episode {index}
+                            </Badge>
+                            {title && (
+                              <p className="line-clamp-2 text-sm font-semibold mt-1">{title}</p>
                             )}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
-                            <div className="absolute bottom-0 left-0 right-0 p-3 text-white">
-                              <Badge variant="glass" className="cursor-default hover:bg-transparent/20">
-                                Episode {index}
-                              </Badge>
-                              {title && (
-                                <p className="line-clamp-2 text-sm font-semibold mt-1">{title}</p>
-                              )}
-                            </div>
                           </div>
                         </div>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            {!isAnyEpisodesLoading && visibleEpisodeCards.length === 0 && episodes.length > 0 && (
-              <p className="text-sm text-muted-foreground">No matching episodes.</p>
-            )}
-          </div>
-        </section>
-      </div>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {!isAnyEpisodesLoading && visibleEpisodeCards.length === 0 && episodes.length > 0 && (
+            <p className="text-sm text-muted-foreground">No matching episodes.</p>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
