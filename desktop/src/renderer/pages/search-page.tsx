@@ -61,10 +61,6 @@ function SearchGridSkeleton() {
       {Array.from({ length: GRID_SKELETON_COUNT }, (_, i) => (
         <div key={i} className="w-full min-w-0">
           <Skeleton className="w-full aspect-[2/3] rounded-2xl" />
-          <div className="mt-2 flex h-16 flex-col gap-2">
-            <Skeleton className="h-3.5 w-[88%]" />
-            <Skeleton className="h-3 w-[52%]" />
-          </div>
         </div>
       ))}
     </div>
