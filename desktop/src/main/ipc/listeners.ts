@@ -1,5 +1,7 @@
 import { ipcMain } from "electron";
 
+import * as ANILIST_CHANNELS from "./anilist/anilist-channels";
+import { addAniListListeners } from "./anilist/anilist-listeners";
 import * as APP_CHANNELS from "./app/app-channels";
 import { addAppEventListeners } from "./app/app-listeners";
 import * as EXTERNAL_CHANNELS from "./external/external-channels";
@@ -16,6 +18,7 @@ import { addWindowEventListeners } from "./window/window-listeners";
 export function registerListeners() {
   addThemeEventListeners();
   addStreamProviderListeners();
+  addAniListListeners();
   addRecentlyWatchedListeners();
   addExternalEventListeners();
   addAppEventListeners();
@@ -24,6 +27,7 @@ export function registerListeners() {
 
 export function unregisterListeners() {
   const allListeners = [
+    ...Object.values(ANILIST_CHANNELS),
     ...Object.values(STREAM_PROVIDER_CHANNELS),
     ...Object.values(WINDOW_CHANNELS),
     ...Object.values(EXTERNAL_CHANNELS),

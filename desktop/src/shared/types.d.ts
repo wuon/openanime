@@ -67,6 +67,31 @@ interface ShowDetails {
   description?: string | null;
 }
 
+interface AniListShowDetails {
+  streamingEpisodes?: Array<{
+    thumbnail?: string | null;
+    title?: string | null;
+  }> | null;
+  bannerImage?: string | null;
+  coverImage?: {
+    extraLarge?: string | null;
+    large?: string | null;
+    medium?: string | null;
+  } | null;
+  description?: string | null;
+  title?: {
+    english?: string | null;
+    romaji?: string | null;
+    native?: string | null;
+  } | null;
+  duration?: number | null;
+  episodes?: number | null;
+  averageScore?: number | null;
+  season?: string | null;
+  seasonYear?: number | null;
+  status?: string | null;
+}
+
 interface RecentlyWatchedEntry {
   id: string;
   providerId: string;
@@ -122,11 +147,16 @@ interface StreamProviderContext {
   ) => Promise<Episode[]>;
 }
 
+interface AniListContext {
+  getShowDetails: (mediaId: number) => Promise<AniListShowDetails>;
+}
+
 declare global {
   interface Window {
     app: AppContext;
     theme: ThemeContext;
     streamProvider: StreamProviderContext;
+    anilist: AniListContext;
     recentlyWatched: RecentlyWatchedContext;
     windowControls: WindowControlsContext;
     urlOpener: UrlOpenerContext;
