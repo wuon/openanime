@@ -51,6 +51,18 @@ function metaBadges(show: AniListShowDetails): string[] {
   ].filter((x): x is string => Boolean(x));
 }
 
+function shuffleInPlace<T>(items: T[]): T[] {
+  const a = [...items];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+const ROTATE_MS = 10000;
+const AUTO_ADVANCE_TICK_MS = 250;
+
 function HomeHeroSlide({ show, isActive }: { show: AniListShowDetails; isActive: boolean }) {
   const navigate = useNavigate();
   const title = displayTitle(show);
@@ -163,10 +175,15 @@ function HomeHeroSkeleton() {
 
 export function HomeHeroCarousel() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const activeIndexRef = useRef(0);
+  const slideStartRef = useRef(Date.now());
+  const advanceLockRef = useRef(false);
   const [items, setItems] = useState<AniListShowDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+
+  activeIndexRef.current = activeIndex;
 
   useEffect(() => {
     let cancelled = false;
@@ -176,7 +193,7 @@ export function HomeHeroCarousel() {
       .getPopularSeason()
       .then((media) => {
         if (!cancelled) {
-          setItems(media);
+          setItems(shuffleInPlace(media));
         }
       })
       .catch((e: unknown) => {
@@ -204,6 +221,11 @@ export function HomeHeroCarousel() {
   }, [items.length]);
 
   useEffect(() => {
+    advanceLockRef.current = false;
+    slideStartRef.current = Date.now();
+  }, [activeIndex]);
+
+  useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     updateIndexFromScroll();
@@ -216,14 +238,27 @@ export function HomeHeroCarousel() {
   }, [updateIndexFromScroll, items.length]);
 
   const scrollToIndex = useCallback(
-    (next: number) => {
+    (next: number, behavior: ScrollBehavior = "smooth") => {
       const el = scrollRef.current;
       if (!el || items.length === 0) return;
       const clamped = Math.min(items.length - 1, Math.max(0, next));
-      el.scrollTo({ left: clamped * el.clientWidth, behavior: "smooth" });
+      el.scrollTo({ left: clamped * el.clientWidth, behavior });
     },
     [items.length]
   );
+
+  useEffect(() => {
+    if (items.length <= 1) return;
+    const id = window.setInterval(() => {
+      const elapsed = Date.now() - slideStartRef.current;
+      if (elapsed >= ROTATE_MS && !advanceLockRef.current) {
+        advanceLockRef.current = true;
+        const next = (activeIndexRef.current + 1) % items.length;
+        scrollToIndex(next, "smooth");
+      }
+    }, AUTO_ADVANCE_TICK_MS);
+    return () => window.clearInterval(id);
+  }, [items.length, scrollToIndex]);
 
   if (loading) {
     return (
@@ -268,19 +303,22 @@ export function HomeHeroCarousel() {
             className="pointer-events-none absolute bottom-3 left-0 right-0 flex justify-center gap-1.5"
             aria-label="Slide indicators"
           >
-            {items.map((show, i) => (
-              <button
-                key={show.id ?? i}
-                type="button"
-                aria-label={`Go to slide ${i + 1}`}
-                aria-current={i === activeIndex ? "true" : undefined}
-                onClick={() => scrollToIndex(i)}
-                className={cn(
-                  "pointer-events-auto h-2 w-2 rounded-full transition-colors hover:bg-foreground/40",
-                  i === activeIndex ? "bg-foreground" : "bg-foreground/25"
-                )}
-              />
-            ))}
+            {items.map((show, i) => {
+              const isActive = i === activeIndex;
+              return (
+                <button
+                  key={show.id ?? i}
+                  type="button"
+                  aria-label={`Go to slide ${i + 1}`}
+                  aria-current={isActive ? "true" : undefined}
+                  onClick={() => scrollToIndex(i)}
+                  className={cn(
+                    "pointer-events-auto h-2 shrink-0 rounded-full w-2 bg-foreground/25 hover:bg-foreground/40",
+                    isActive ? "bg-foreground hover:bg-foreground/90" : ""
+                  )}
+                />
+              );
+            })}
           </div>
         </>
       ) : null}
