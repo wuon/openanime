@@ -306,8 +306,8 @@ export function WatchPage() {
     "Unknown";
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="sticky top-12 z-10 flex items-center gap-3 px-4 py-2 border-b border-border shrink-0 bg-background">
+    <div className="w-full max-w-[1600px] mx-auto flex flex-col gap-6 p-6 md:p-8">
+      <div className="flex items-center gap-3">
         <Button type="button" variant="ghost" size="icon" onClick={goBack} aria-label="Back">
           <ArrowLeft className="h-5 w-5" />
         </Button>
@@ -351,73 +351,71 @@ export function WatchPage() {
       </div>
 
       {/* Video player - fixed 16:9 area, centered */}
-      <div className="w-full flex items-center justify-center shrink-0 p-8">
-        <div className="w-full max-w-5xl px-4">
-          <div className="relative w-full aspect-video bg-black rounded-md overflow-hidden flex items-center justify-center">
-            {loadingEpisode && !playUrl ? (
-              <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                <Loader2 className="h-10 w-10 animate-spin" />
-                <span className="text-sm">Loading stream…</span>
-              </div>
-            ) : error && !playUrl ? (
-              <div className="flex flex-col items-center gap-3 text-destructive px-4 text-center">
-                <span className="text-sm">{error}</span>
-                <Button type="button" variant="secondary" size="sm" onClick={retryStream}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Retry
-                </Button>
-              </div>
-            ) : playUrl ? (
-              <div className="relative h-full w-full">
-                <video
-                  ref={videoRef}
-                  key={streamRevision}
-                  className="h-full w-full object-contain bg-black"
-                  controls
-                  autoPlay
-                  playsInline
-                  src={playUrl}
-                  onLoadedMetadata={(e) => {
-                    applyResumeIfNeeded(e.currentTarget);
-                    void syncHistoryProgress();
-                  }}
-                  onPause={() => {
-                    void syncHistoryProgress();
-                  }}
-                  onEnded={() => {
-                    void syncHistoryProgress();
-                  }}
-                  onPlaying={handleVideoPlaying}
-                  onError={handleVideoError}
-                />
-                {playbackError ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/85 px-4 text-center">
-                    <p className="text-sm text-white/90 max-w-md">{playbackError}</p>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      disabled={loadingEpisode}
-                      onClick={retryStream}
-                    >
-                      {loadingEpisode ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Reload stream
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2 text-muted-foreground px-4 text-center">
-                <span className="text-sm">Select an episode to play</span>
-              </div>
-            )}
-          </div>
+      <div className="w-full flex items-center justify-center shrink-0">
+        <div className="relative max-w-5xl aspect-video bg-black rounded-md overflow-hidden flex items-center justify-center">
+          {loadingEpisode && !playUrl ? (
+            <div className="flex flex-col items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-10 w-10 animate-spin" />
+              <span className="text-sm">Loading stream…</span>
+            </div>
+          ) : error && !playUrl ? (
+            <div className="flex flex-col items-center gap-3 text-destructive px-4 text-center">
+              <span className="text-sm">{error}</span>
+              <Button type="button" variant="secondary" size="sm" onClick={retryStream}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Retry
+              </Button>
+            </div>
+          ) : playUrl ? (
+            <div className="relative h-full w-full">
+              <video
+                ref={videoRef}
+                key={streamRevision}
+                className="h-full w-full object-contain bg-black"
+                controls
+                autoPlay
+                playsInline
+                src={playUrl}
+                onLoadedMetadata={(e) => {
+                  applyResumeIfNeeded(e.currentTarget);
+                  void syncHistoryProgress();
+                }}
+                onPause={() => {
+                  void syncHistoryProgress();
+                }}
+                onEnded={() => {
+                  void syncHistoryProgress();
+                }}
+                onPlaying={handleVideoPlaying}
+                onError={handleVideoError}
+              />
+              {playbackError ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/85 px-4 text-center">
+                  <p className="text-sm text-white/90 max-w-md">{playbackError}</p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={loadingEpisode}
+                    onClick={retryStream}
+                  >
+                    {loadingEpisode ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Reload stream
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2 text-muted-foreground px-4 text-center">
+              <span className="text-sm">Select an episode to play</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
