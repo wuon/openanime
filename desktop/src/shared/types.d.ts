@@ -73,7 +73,8 @@ interface ShowDetails {
   description?: string | null;
 }
 
-interface AniListShowDetails {
+export interface AniListShowDetails {
+  id?: number;
   streamingEpisodes?: Array<{
     thumbnail?: string | null;
     title?: string | null;
@@ -83,12 +84,14 @@ interface AniListShowDetails {
     extraLarge?: string | null;
     large?: string | null;
     medium?: string | null;
+    color?: string | null;
   } | null;
   description?: string | null;
   title?: {
     english?: string | null;
     romaji?: string | null;
     native?: string | null;
+    userPreferred?: string | null;
   } | null;
   duration?: number | null;
   episodes?: number | null;
@@ -96,6 +99,82 @@ interface AniListShowDetails {
   season?: string | null;
   seasonYear?: number | null;
   status?: string | null;
+  type?: string | null;
+  format?: string | null;
+  genres?: string[] | null;
+  isAdult?: boolean | null;
+  popularity?: number | null;
+  chapters?: number | null;
+  volumes?: number | null;
+  startDate?: {
+    year?: number | null;
+    month?: number | null;
+    day?: number | null;
+  } | null;
+  endDate?: {
+    year?: number | null;
+    month?: number | null;
+    day?: number | null;
+  } | null;
+  nextAiringEpisode?: {
+    airingAt: number;
+    timeUntilAiring: number;
+    episode: number;
+  } | null;
+  mediaListEntry?: {
+    id: number;
+    status: string;
+  } | null;
+  studios?: Array<{
+    isMain?: boolean | null;
+    node: { id: number; name: string };
+  }>;
+}
+
+export interface AniListMediaPageVariables {
+  page?: number;
+  id?: number;
+  type?: string;
+  isAdult?: boolean;
+  search?: string;
+  format?: string[];
+  status?: string;
+  countryOfOrigin?: string;
+  source?: string;
+  season?: string;
+  seasonYear?: number;
+  year?: string;
+  onList?: boolean;
+  yearLesser?: number;
+  yearGreater?: number;
+  episodeLesser?: number;
+  episodeGreater?: number;
+  durationLesser?: number;
+  durationGreater?: number;
+  chapterLesser?: number;
+  chapterGreater?: number;
+  volumeLesser?: number;
+  volumeGreater?: number;
+  licensedBy?: number[];
+  isLicensed?: boolean;
+  genres?: string[];
+  excludedGenres?: string[];
+  tags?: string[];
+  excludedTags?: string[];
+  minimumTagRank?: number;
+  /** GraphQL expects `[MediaSort]`; a single string is normalized to a one-element array. */
+  sort?: string[] | string;
+}
+
+export interface AniListMediaPageResult {
+  pageInfo: {
+    total?: number | null;
+    perPage?: number | null;
+    currentPage?: number | null;
+    lastPage?: number | null;
+    hasNextPage?: boolean | null;
+  };
+  media: AniListShowDetails[];
 }
 
 interface HistoryEntry {
@@ -148,6 +227,8 @@ interface StreamProviderContext {
 
 interface AniListContext {
   getShowDetails: (mediaId: number) => Promise<AniListShowDetails>;
+  search: (variables: AniListMediaPageVariables) => Promise<AniListMediaPageResult>;
+  getPopularSeason: () => Promise<AniListShowDetails[]>;
 }
 
 declare global {
