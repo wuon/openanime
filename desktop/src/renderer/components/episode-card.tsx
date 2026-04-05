@@ -104,7 +104,7 @@ export function EpisodeCard({
           ) : null}
           <div className="absolute bottom-0 left-0 right-0 p-3 text-white">
             {badgeContent != null && (
-              <Badge variant="glass" className="cursor-default hover:bg-transparent/20">
+              <Badge variant="glass" className="cursor-default hover:bg-transparent/20 text-white">
                 {badgeContent}
               </Badge>
             )}

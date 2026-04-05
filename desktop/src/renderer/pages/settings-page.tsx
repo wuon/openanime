@@ -15,6 +15,9 @@ function openExternalUrl(url: string) {
 export function SettingsPage() {
   const [updateCheck, setUpdateCheck] = useState<AppUpdateCheckResult | null>(null);
   const [updateLoading, setUpdateLoading] = useState(true);
+  const [watchHistoryLoading, setWatchHistoryLoading] = useState(true);
+  const [hasWatchHistory, setHasWatchHistory] = useState(false);
+  const [clearHistoryBusy, setClearHistoryBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,6 +37,33 @@ export function SettingsPage() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setWatchHistoryLoading(true);
+    void window.recentlyWatched.read().then((entries) => {
+      if (!cancelled) {
+        setHasWatchHistory(entries.length > 0);
+      }
+    }).finally(() => {
+      if (!cancelled) {
+        setWatchHistoryLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const onClearWatchHistory = useCallback(async () => {
+    setClearHistoryBusy(true);
+    try {
+      await window.recentlyWatched.clear();
+      setHasWatchHistory(false);
+    } finally {
+      setClearHistoryBusy(false);
+    }
   }, []);
 
   const onUpdateClick = useCallback(() => {
@@ -82,6 +112,26 @@ export function SettingsPage() {
             Could not check for updates ({updateCheck.error}).
           </p>
         )}
+      </section>
+
+      <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1 min-w-0">
+          <h2 className="text-sm font-medium">Watch history</h2>
+          <p className="text-sm text-muted-foreground">
+            Clear saved playback progress for Continue watching on this device.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="sm:shrink-0 w-full sm:w-auto text-destructive hover:text-destructive border-destructive/40 hover:bg-destructive/10"
+          disabled={watchHistoryLoading || !hasWatchHistory || clearHistoryBusy}
+          onClick={() => {
+            void onClearWatchHistory();
+          }}
+        >
+          Clear history
+        </Button>
       </section>
 
       <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

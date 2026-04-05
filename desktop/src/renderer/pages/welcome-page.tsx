@@ -1,4 +1,4 @@
-import { Search, Trash2 } from "lucide-react";
+import { Search } from "lucide-react";
 import React, { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -19,7 +19,7 @@ export function WelcomePage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const { recentUploads, recentUploadsLoading } = useWelcomeRecentlyUploaded(RECENT_PAGE_SIZE);
-  const { recentlyWatched, recentlyWatchedLoading, recentlyWatchedDetails, clearRecentlyWatched } =
+  const { recentlyWatched, recentlyWatchedLoading, recentlyWatchedDetails } =
     useWelcomeRecentlyWatched();
 
   const openAniCliRepo = useCallback(() => {
@@ -104,20 +104,7 @@ export function WelcomePage() {
 
       <>
         <section className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Continue watching</h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                void clearRecentlyWatched();
-              }}
-              disabled={recentlyWatchedLoading || recentlyWatched.length === 0}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
+          <h2 className="text-lg font-semibold">Continue watching</h2>
           {recentlyWatchedLoading ? (
             <p className="text-muted-foreground text-sm">Loading…</p>
           ) : recentlyWatched.length > 0 ? (
