@@ -1,7 +1,7 @@
 {
   "name": "Openanime",
   "productName": "Openanime",
-  "version": "1.0.0-alpha",
+  "version": "2.0.0-alpha",
   "description": "An easy to use anime desktop app with a provider-based architecture, combining a familiar streaming workflow with a modern UI.",
   "main": ".vite/build/main.js",
   "scripts": {
