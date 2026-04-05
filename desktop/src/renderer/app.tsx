@@ -6,6 +6,7 @@ import { HashRouter, Route, Routes } from "react-router-dom";
 import { initI18n } from "@/renderer/helpers/i18n/i18n";
 import { updateAppLanguage } from "@/renderer/helpers/i18n/language-helpers";
 import { syncThemeWithLocal } from "@/renderer/helpers/theme/theme-helper";
+import { ScrollToTop } from "@/renderer/components/scroll-to-top";
 import SidebarLayout from "@/renderer/layouts/sidebar-layout";
 import { PlayerPage } from "@/renderer/pages/player-page";
 import { SearchPage } from "@/renderer/pages/search-page";
@@ -24,6 +25,7 @@ export default function App() {
 
   return (
     <HashRouter>
+      <ScrollToTop />
       <Routes>
         <Route element={<SidebarLayout />}>
           <Route path="/" element={<WelcomePage />} />
