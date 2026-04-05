@@ -11,17 +11,46 @@ import {
   SelectValue,
 } from "@/renderer/components/ui/select";
 import { useGoBack } from "@/renderer/hooks/use-go-back";
-import { ShowDetails } from "@/shared/types";
+import type { Episode, HistoryEntry } from "@/shared/types";
+
+import { type RichShowDetails, useShowDetails } from "../hooks/use-show-details";
 
 /** How many automatic reconnects after a playback error before showing the manual overlay. */
 const MAX_AUTO_RECONNECT = 5;
 
+function buildWatchHistoryEntry(
+  episode: Episode,
+  ep: string,
+  showDetails: RichShowDetails | null
+): HistoryEntry {
+  const index = Number(ep);
+  const mode = episode.mode;
+  const richList = showDetails?.episodes[mode] ?? [];
+  const rich = richList.find((e) => e.index === index);
+  const thumb =
+    rich?.thumbnail ?? showDetails?.coverImage ?? showDetails?.bannerImage ?? episode.thumbnail;
+
+  return {
+    id: `${episode.id}-${ep}`,
+    provider: "allanime",
+    episode: {
+      ...episode,
+      index,
+      title: {
+        english: showDetails?.title.english ?? episode.title.english,
+        romanji: showDetails?.title.romaji ?? episode.title.romanji,
+        native: showDetails?.title.native ?? episode.title.native,
+      },
+      thumbnail: thumb,
+    },
+    currentDurationMs: 0,
+    totalDurationMs: 0,
+    timestamp: Date.now(),
+  };
+}
+
 interface WatchState {
-  anime: { id: string; providerId: string; name: string; mode: "sub" | "dub" };
-  episodes: string[];
-  currentEpisode: string;
-  /** When true, open on the latest episode (e.g. from recently uploaded tile) */
-  preferLatest?: boolean;
+  episode: Episode;
 }
 
 export function WatchPage() {
@@ -33,23 +62,30 @@ export function WatchPage() {
   /** Bumps when a new stream URL is ready so the <video> remounts (retry after errors). */
   const [streamRevision, setStreamRevision] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
-  const [details, setDetails] = useState<ShowDetails | null>(null);
-  const [, setLoading] = useState(true);
   const [loadingEpisode, setLoadingEpisode] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const anime = state?.anime;
-  const [episodes, setEpisodes] = useState<string[]>(() => state?.episodes ?? []);
-  const initialEpisode = state?.currentEpisode ?? episodes[0] ?? "";
+  const episode = state?.episode;
 
-  const [currentEpisode, setCurrentEpisode] = useState<string>(initialEpisode);
+  const {
+    details: showDetails,
+    loading: showLoading,
+    error: showError,
+  } = useShowDetails(episode?.id, episode?.providerId);
+
+  const episodes = episode && showDetails ? (showDetails.episodes[episode.mode] ?? []) : [];
+
+  const [currentEpisode, setCurrentEpisode] = useState<number>(() => episode?.index ?? 1);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const lastHistoryEntryRef = useRef<HistoryEntry | null>(null);
   /** Seconds to seek to after the next successful load (set before reload). */
   const resumeAfterLoadRef = useRef<number | null>(null);
   /** Last known position when playback failed (for manual retry after overlay). */
   const lastPlaybackTimeRef = useRef<number | null>(null);
   const autoReconnectAttemptRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Stream revision when load succeeded; upsert runs after show details finish loading. */
+  const deferredHistoryUpsertRef = useRef<{ revision: number; ep: string } | null>(null);
 
   const clearReconnectTimeout = useCallback(() => {
     if (reconnectTimeoutRef.current != null) {
@@ -58,9 +94,34 @@ export function WatchPage() {
     }
   }, []);
 
+  const syncHistoryProgress = useCallback(async () => {
+    if (deferredHistoryUpsertRef.current != null) return;
+    const base = lastHistoryEntryRef.current;
+    const video = videoRef.current;
+    if (!base || !video) return;
+    const currentMs = Math.max(0, Math.floor(video.currentTime * 1000));
+    let totalMs = base.totalDurationMs;
+    if (Number.isFinite(video.duration) && video.duration > 0) {
+      totalMs = Math.floor(video.duration * 1000);
+    }
+    const next: HistoryEntry = {
+      ...base,
+      currentDurationMs: currentMs,
+      totalDurationMs: totalMs,
+      timestamp: Date.now(),
+    };
+    lastHistoryEntryRef.current = next;
+    try {
+      await window.recentlyWatched.upsert(next);
+    } catch {
+      // best-effort
+    }
+  }, []);
+
   const loadStream = useCallback(
     async (ep: string, opts?: { resumeFrom?: number | null }) => {
-      if (!anime?.providerId || !ep) return;
+      if (!episode?.providerId || !ep) return;
+      lastHistoryEntryRef.current = null;
       clearReconnectTimeout();
       if (opts?.resumeFrom != null && opts.resumeFrom > 0) {
         resumeAfterLoadRef.current = opts.resumeFrom;
@@ -72,29 +133,70 @@ export function WatchPage() {
       setPlaybackError(null);
       try {
         const { url, referer } = await window.streamProvider.getStreamUrl(
-          anime.id,
-          anime.providerId,
+          episode.id,
+          episode.providerId,
           ep,
-          anime.mode
+          episode.mode
         );
         const base = await window.streamProvider.getStreamProxyBaseUrl();
         const urlWithProxy = `${base}/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
         setPlayUrl(urlWithProxy);
-        setStreamRevision((r) => r + 1);
-        setCurrentEpisode(ep);
-        try {
-          await window.recentlyWatched.record(anime.id, anime.providerId, ep, anime.mode);
-        } catch {
-          // Ignore - recording is best-effort
-        }
+        setStreamRevision((r) => {
+          const next = r + 1;
+          deferredHistoryUpsertRef.current = { revision: next, ep };
+          return next;
+        });
+        setCurrentEpisode(Number(ep));
+        lastHistoryEntryRef.current = buildWatchHistoryEntry(episode, ep, null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load stream");
       } finally {
         setLoadingEpisode(false);
       }
     },
-    [anime, clearReconnectTimeout]
+    [episode, clearReconnectTimeout]
   );
+
+  useEffect(() => {
+    if (!episode) return;
+    setCurrentEpisode(episode.index);
+  }, [episode?.id, episode?.providerId, episode?.index, episode?.mode]);
+
+  useEffect(() => {
+    if (!episode) return;
+    void loadStream(String(episode.index));
+  }, [episode?.id, episode?.providerId, episode?.index, episode?.mode, loadStream]);
+
+  useEffect(() => {
+    if (showLoading || !episode || !playUrl) return;
+    const pending = deferredHistoryUpsertRef.current;
+    if (!pending || pending.revision !== streamRevision) return;
+
+    const prev = lastHistoryEntryRef.current;
+    const entry = buildWatchHistoryEntry(episode, pending.ep, showDetails);
+    const video = videoRef.current;
+    if (video && !Number.isNaN(video.currentTime) && video.currentTime > 0) {
+      entry.currentDurationMs = Math.max(
+        entry.currentDurationMs,
+        Math.floor(video.currentTime * 1000)
+      );
+    }
+    if (video && Number.isFinite(video.duration) && video.duration > 0) {
+      entry.totalDurationMs = Math.floor(video.duration * 1000);
+    } else if (prev && prev.id === entry.id && prev.totalDurationMs > 0) {
+      entry.totalDurationMs = prev.totalDurationMs;
+    }
+    lastHistoryEntryRef.current = entry;
+    deferredHistoryUpsertRef.current = null;
+    void window.recentlyWatched.upsert(entry).then(
+      () => {
+        void syncHistoryProgress();
+      },
+      () => {
+        // best-effort
+      }
+    );
+  }, [showLoading, showDetails, playUrl, episode, streamRevision, syncHistoryProgress]);
 
   useEffect(() => {
     return () => {
@@ -102,77 +204,16 @@ export function WatchPage() {
     };
   }, [clearReconnectTimeout]);
 
-  useEffect(() => {
-    if (!state?.anime) {
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    const initialEpisodes = state.episodes ?? [];
-    void Promise.all([
-      window.streamProvider.getShowDetails(state.anime.providerId),
-      initialEpisodes.length === 0
-        ? window.streamProvider.getEpisodes(state.anime.providerId, state.anime.mode)
-        : Promise.resolve(initialEpisodes),
-    ])
-      .then(async ([d, epList]) => {
-        if (cancelled) return;
-        setDetails(d);
-
-        let episodesToUse = initialEpisodes;
-        if (initialEpisodes.length === 0 && Array.isArray(epList)) {
-          episodesToUse = epList;
-          setEpisodes(epList);
-        }
-
-        const fallbackEpisode = episodesToUse[0] ?? "";
-        const preferredEpisode =
-          state.preferLatest && episodesToUse.length > 0
-            ? episodesToUse[episodesToUse.length - 1]
-            : state.currentEpisode || fallbackEpisode;
-
-        if (!preferredEpisode) return;
-        setCurrentEpisode(preferredEpisode);
-        await loadStream(preferredEpisode);
-      })
-      .catch(() => {
-        if (!cancelled)
-          setDetails({
-            id: state.anime.id,
-            providerId: state.anime.providerId,
-            name: state.anime.name,
-            thumbnail: null,
-            type: "TV",
-          });
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    state?.anime?.id,
-    state?.anime?.providerId,
-    state?.anime?.name,
-    state?.anime?.mode,
-    state?.episodes,
-    state?.currentEpisode,
-    state?.preferLatest,
-    loadStream,
-  ]);
-
   const onEpisodeSelect = useCallback(
     (ep: string) => {
-      setCurrentEpisode(ep);
+      setCurrentEpisode(Number(ep));
       void loadStream(ep);
     },
     [loadStream]
   );
 
   const retryStream = useCallback(() => {
-    if (!currentEpisode) return;
+    if (!Number.isFinite(currentEpisode)) return;
     clearReconnectTimeout();
     autoReconnectAttemptRef.current = 0;
     const el = videoRef.current;
@@ -182,7 +223,7 @@ export function WatchPage() {
     setPlayUrl("");
     setPlaybackError(null);
     setError(null);
-    void loadStream(currentEpisode, resumeFrom != null ? { resumeFrom } : undefined);
+    void loadStream(currentEpisode.toString(), resumeFrom != null ? { resumeFrom } : undefined);
   }, [clearReconnectTimeout, currentEpisode, loadStream]);
 
   const handleVideoError = useCallback(() => {
@@ -201,7 +242,7 @@ export function WatchPage() {
       setPlayUrl("");
       setPlaybackError(null);
       const run = () => {
-        void loadStream(ep, t > 0 ? { resumeFrom: t } : undefined);
+        void loadStream(ep.toString(), t > 0 ? { resumeFrom: t } : undefined);
       };
       if (delayMs === 0) {
         run();
@@ -236,11 +277,17 @@ export function WatchPage() {
     autoReconnectAttemptRef.current = 0;
   }, []);
 
-  if (!state?.anime) {
+  useEffect(() => {
+    return () => {
+      void syncHistoryProgress();
+    };
+  }, [syncHistoryProgress]);
+
+  if (!episode) {
     return (
       <div className="container flex flex-col items-center justify-center gap-4 p-8">
         <p className="text-muted-foreground">
-          No anime selected. Go back and pick an episode to play.
+          No episode selected. Go back and pick an episode to play.
         </p>
         <Button type="button" variant="outline" onClick={goBack}>
           Go back
@@ -249,7 +296,14 @@ export function WatchPage() {
     );
   }
 
-  const displayName = details?.name ?? anime.name;
+  const displayName =
+    showDetails?.title.english ??
+    showDetails?.title.romaji ??
+    showDetails?.title.native ??
+    episode.title.english ??
+    episode.title.romanji ??
+    episode.title.native ??
+    "Unknown";
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -258,18 +312,37 @@ export function WatchPage() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <span className="text-sm font-medium truncate flex-1 min-w-0">
-          {displayName} ({anime.mode === "dub" ? "Dub" : "Sub"})
+          {showLoading && !showDetails ? (
+            <span className="inline-flex items-center gap-2 text-muted-foreground font-normal">
+              <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+              Loading show…
+            </span>
+          ) : (
+            `${displayName} (${episode.mode === "dub" ? "Dub" : "Sub"})`
+          )}
         </span>
+        {showError && !showDetails ? (
+          <span
+            className="text-xs text-destructive shrink-0 max-w-[200px] truncate"
+            title={showError}
+          >
+            {showError}
+          </span>
+        ) : null}
 
         <div className="flex items-center gap-2 shrink-0">
-          <Select value={currentEpisode} onValueChange={onEpisodeSelect} disabled={loadingEpisode}>
+          <Select
+            value={currentEpisode.toString()}
+            onValueChange={onEpisodeSelect}
+            disabled={loadingEpisode || showLoading}
+          >
             <SelectTrigger className="w-[120px] bg-background h-8">
               <SelectValue placeholder="Episode" />
             </SelectTrigger>
             <SelectContent>
               {episodes.map((ep) => (
-                <SelectItem key={ep} value={ep}>
-                  Episode {ep}
+                <SelectItem key={ep.index} value={ep.index.toString()}>
+                  Episode {ep.index}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -306,6 +379,13 @@ export function WatchPage() {
                   src={playUrl}
                   onLoadedMetadata={(e) => {
                     applyResumeIfNeeded(e.currentTarget);
+                    void syncHistoryProgress();
+                  }}
+                  onPause={() => {
+                    void syncHistoryProgress();
+                  }}
+                  onEnded={() => {
+                    void syncHistoryProgress();
                   }}
                   onPlaying={handleVideoPlaying}
                   onError={handleVideoError}

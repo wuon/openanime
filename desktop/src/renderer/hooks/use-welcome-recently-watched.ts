@@ -1,18 +1,32 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   SHOW_DETAILS_FETCH_CONCURRENCY,
   mergeShowDetailsByid,
   type ShowDetailsSummary,
 } from "@/renderer/lib/fetch-show-thumbnails";
-import { RecentlyWatchedEntry } from "@/shared/types";
+import type { HistoryEntry } from "@/shared/types";
+
+const DISPLAY_UNIQUE_SHOW_LIMIT = 12;
 
 export function useWelcomeRecentlyWatched() {
-  const [recentlyWatched, setRecentlyWatched] = useState<RecentlyWatchedEntry[]>([]);
+  const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [recentlyWatchedLoading, setRecentlyWatchedLoading] = useState(true);
   const [recentlyWatchedDetails, setRecentlyWatchedDetails] = useState<
     Record<string, ShowDetailsSummary>
   >({});
+
+  const recentlyWatched = useMemo(() => {
+    const out: HistoryEntry[] = [];
+    const seen = new Set<string>();
+    for (let i = historyEntries.length - 1; i >= 0 && out.length < DISPLAY_UNIQUE_SHOW_LIMIT; i--) {
+      const e = historyEntries[i];
+      if (seen.has(e.episode.id)) continue;
+      seen.add(e.episode.id);
+      out.push(e);
+    }
+    return out;
+  }, [historyEntries]);
 
   useEffect(() => {
     let cancelled = false;
@@ -20,7 +34,7 @@ export function useWelcomeRecentlyWatched() {
     window.recentlyWatched
       .read()
       .then((entries) => {
-        if (!cancelled) setRecentlyWatched(entries);
+        if (!cancelled) setHistoryEntries(entries);
       })
       .finally(() => {
         if (!cancelled) setRecentlyWatchedLoading(false);
@@ -36,10 +50,11 @@ export function useWelcomeRecentlyWatched() {
     const seen = new Set<string>();
     const toFetch: Array<{ id: string; providerId: string }> = [];
     for (const entry of recentlyWatched) {
-      if (seen.has(entry.id)) continue;
-      seen.add(entry.id);
-      if (recentlyWatchedDetails[entry.id] !== undefined) continue;
-      toFetch.push({ id: entry.id, providerId: entry.providerId });
+      const showId = entry.episode.id;
+      if (seen.has(showId)) continue;
+      seen.add(showId);
+      if (recentlyWatchedDetails[showId] !== undefined) continue;
+      toFetch.push({ id: showId, providerId: entry.episode.providerId });
     }
     if (toFetch.length === 0) return;
 
@@ -59,7 +74,7 @@ export function useWelcomeRecentlyWatched() {
 
   const clearRecentlyWatched = useCallback(async () => {
     await window.recentlyWatched.clear();
-    setRecentlyWatched([]);
+    setHistoryEntries([]);
     setRecentlyWatchedDetails({});
   }, []);
 

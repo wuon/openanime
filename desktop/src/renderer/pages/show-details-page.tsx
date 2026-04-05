@@ -16,6 +16,7 @@ import { useGoBack } from "@/renderer/hooks/use-go-back";
 import { useShowDetails } from "@/renderer/hooks/use-show-details";
 import { Show } from "@/shared/types";
 
+import { EpisodeCard } from "@/renderer/components/episode-card";
 import { Badge } from "../components/ui/badge";
 
 interface LocationState {
@@ -73,26 +74,37 @@ export function ShowDetailsPage() {
   }, [anime?.mode, episodesByMode.dub, episodesByMode.sub]);
 
   const playEpisode = useCallback(
-    (episode: string, episodes: string[], mode: AnimeMode) => {
-      if (!anime?.id) return;
+    (episode: string) => {
       setPlayingEpisode(episode);
-      const detailsName =
-        details?.title.english ?? details?.title.romaji ?? details?.title.native ?? anime.name;
+
       navigate("/watch", {
         state: {
-          anime: {
-            id: anime.id,
-            providerId: anime.providerId,
-            name: detailsName,
-            mode,
+          episode: {
+            id: details?.id,
+            providerId: details?.providerId,
+            title: {
+              english: details?.title.english,
+              romanji: details?.title.romaji,
+              native: details?.title.native,
+            },
+            thumbnail: details?.coverImage,
+            index: Number(episode),
+            mode: activeMode,
           },
-          episodes,
-          currentEpisode: episode,
         },
       });
       setPlayingEpisode(null);
     },
-    [navigate, anime, details?.title.english, details?.title.native, details?.title.romaji]
+    [
+      navigate,
+      details?.id,
+      details?.providerId,
+      details?.title.english,
+      details?.title.romaji,
+      details?.title.native,
+      details?.coverImage,
+      activeMode,
+    ]
   );
 
   if (!id) {
@@ -249,7 +261,7 @@ export function ShowDetailsPage() {
                   type="button"
                   onClick={() => {
                     if (episodes[0]) {
-                      playEpisode(episodes[0], episodes, activeMode);
+                      playEpisode(episodes[0]);
                     }
                   }}
                   disabled={!episodes[0]}
@@ -339,39 +351,14 @@ export function ShowDetailsPage() {
                 const isPlaying = playingEpisode === episode;
                 return (
                   <li key={`${activeMode}-${episode}`} className="w-full">
-                    <button
-                      type="button"
-                      onClick={() => playEpisode(episode, episodes, activeMode)}
+                    <EpisodeCard
+                      thumbnailUrl={thumbnail}
+                      episodeIndex={index}
+                      subtitle={title}
+                      onClick={() => playEpisode(episode)}
                       disabled={isPlaying}
-                      className="group w-full text-left focus-visible:outline-none disabled:opacity-60"
-                    >
-                      <div className="relative h-40 w-full rounded-2xl border-2 border-border p-[3px] box-border transition-all group-hover:border-primary/80 group-hover:shadow-[0_0_0_1px_rgba(129,140,248,0.7)] group-focus-visible:border-primary/80 group-focus-visible:shadow-[0_0_0_1px_rgba(129,140,248,0.7)]">
-                        <div className="relative h-full w-full overflow-hidden rounded-lg bg-muted">
-                          {thumbnail ? (
-                            <img
-                              src={thumbnail}
-                              alt=""
-                              draggable={false}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="h-full w-full bg-muted" />
-                          )}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
-                          <div className="absolute bottom-0 left-0 right-0 p-3 text-white">
-                            <Badge
-                              variant="glass"
-                              className="cursor-default hover:bg-transparent/20"
-                            >
-                              Episode {index}
-                            </Badge>
-                            {title && (
-                              <p className="line-clamp-2 text-sm font-semibold mt-1">{title}</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </button>
+                      layout="grid"
+                    />
                   </li>
                 );
               })}

@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { Children, useCallback, useEffect, useRef, useState } from "react";
 
 import { ShowCard, type ShowCardItem } from "@/renderer/components/show-grid";
 
@@ -9,13 +9,21 @@ export type HorizontalCarouselItem = ShowCardItem;
 export const HorizontalCarouselCard = ShowCard;
 
 type HorizontalCarouselProps = {
-  /** Items rendered as standard anime-style cards with cover, title, and subtitle. */
-  items: HorizontalCarouselItem[];
   /** How many fully-visible items to page by when clicking arrows. */
   pageSize?: number;
-};
+} & (
+  | {
+      items: HorizontalCarouselItem[];
+      children?: undefined;
+    }
+  | {
+      items?: undefined;
+      /** Custom row (e.g. `EpisodeCard` with `layout="carousel"`). Each item should set `data-carousel-item`. */
+      children: React.ReactNode;
+    }
+);
 
-export function HorizontalCarousel({ items, pageSize = 6 }: HorizontalCarouselProps) {
+export function HorizontalCarousel({ items, children, pageSize = 6 }: HorizontalCarouselProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -53,11 +61,13 @@ export function HorizontalCarousel({ items, pageSize = 6 }: HorizontalCarouselPr
     [pageSize]
   );
 
+  const itemCount = items?.length ?? Children.count(children);
+
   useEffect(() => {
     updateScrollState();
     window.addEventListener("resize", updateScrollState);
     return () => window.removeEventListener("resize", updateScrollState);
-  }, [updateScrollState, items.length]);
+  }, [updateScrollState, itemCount]);
 
   return (
     <div className="relative">
@@ -65,11 +75,9 @@ export function HorizontalCarousel({ items, pageSize = 6 }: HorizontalCarouselPr
         <div
           ref={scrollRef}
           onScroll={updateScrollState}
-          className="flex gap-3 overflow-x-auto pb-2 scroll-smooth pr-6 scrollbar-none"
+          className="flex gap-3 overflow-x-auto pb-2 scroll-smooth px-8 scrollbar-none -mx-8"
         >
-          {items.map((item) => (
-            <ShowCard key={item.id} item={item} />
-          ))}
+          {items ? items.map((item) => <ShowCard key={item.id} item={item} />) : children}
         </div>
 
         {canScrollLeft && (

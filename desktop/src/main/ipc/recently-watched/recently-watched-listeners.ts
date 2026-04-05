@@ -2,128 +2,86 @@ import { app, ipcMain } from "electron";
 import fs from "fs";
 import path from "path";
 
+import type { HistoryEntry } from "@/shared/types";
+
 import {
   RECENTLY_WATCHED_CLEAR_CHANNEL,
   RECENTLY_WATCHED_READ_CHANNEL,
-  RECENTLY_WATCHED_RECORD_CHANNEL,
+  RECENTLY_WATCHED_UPSERT_CHANNEL,
 } from "./recently-watched-channels";
 
-export interface RecentlyWatchedEntry {
-  id: string;
-  providerId: string;
-  episode: string;
-  mode: "sub" | "dub";
-  /** Present on rows written after timestamp support; ms since epoch. */
-  timestamp?: number;
-}
-
-const FILENAME = "recently-watched.txt";
-const SEPARATOR = "\t";
-/** Max rows shown in the recently watched section (newest unique series first). */
-const READ_UNIQUE_LIMIT = 12;
+const FILENAME = "watch-history.json";
 
 function getFilePath(): string {
   return path.join(app.getPath("userData"), FILENAME);
 }
 
-function parseLine(line: string): RecentlyWatchedEntry | null {
-  const trimmed = line.trim();
-  if (!trimmed) return null;
-  const parts = trimmed.split(SEPARATOR);
-  if (parts.length < 3) return null;
-  const last = parts[parts.length - 1];
-  const tsNum = Number(last);
-  const hasTimestamp =
-    parts.length >= 4 && Number.isFinite(tsNum) && /^\d+$/.test(last.trim());
-  const hasProviderId = parts.length >= 5;
-  if (hasTimestamp) {
-    const modeRaw = parts[parts.length - 2];
-    const mode = modeRaw === "dub" ? "dub" : "sub";
-    const id = parts[0];
-    if (hasProviderId) {
-      const providerId = parts[1];
-      const episode = parts.slice(2, -2).join(SEPARATOR);
-      return { id, providerId, episode, mode, timestamp: tsNum };
-    }
-    // Legacy rows: id was previously the provider id.
-    const episode = parts.slice(1, -2).join(SEPARATOR);
-    return { id, providerId: id, episode, mode, timestamp: tsNum };
-  }
-  const [id, episode, modeRaw] = parts;
-  const mode = modeRaw === "dub" ? "dub" : "sub";
-  // Legacy rows: id was previously the provider id.
-  return { id, providerId: id, episode, mode };
+function isValidHistoryEntry(x: unknown): x is HistoryEntry {
+  if (!x || typeof x !== "object") return false;
+  const e = x as Record<string, unknown>;
+  if (typeof e.id !== "string") return false;
+  if (typeof e.provider !== "string") return false;
+  if (typeof e.currentDurationMs !== "number" || !Number.isFinite(e.currentDurationMs))
+    return false;
+  if (typeof e.totalDurationMs !== "number" || !Number.isFinite(e.totalDurationMs)) return false;
+  if (typeof e.timestamp !== "number" || !Number.isFinite(e.timestamp)) return false;
+  const ep = e.episode;
+  if (!ep || typeof ep !== "object") return false;
+  const epObj = ep as Record<string, unknown>;
+  if (typeof epObj.id !== "string" || typeof epObj.providerId !== "string") return false;
+  if (typeof epObj.index !== "number" || !Number.isFinite(epObj.index)) return false;
+  if (epObj.mode !== "sub" && epObj.mode !== "dub") return false;
+  if (epObj.thumbnail !== null && typeof epObj.thumbnail !== "string") return false;
+  const title = epObj.title;
+  if (!title || typeof title !== "object") return false;
+  return true;
 }
 
-async function readEntriesOldestFirst(filePath: string): Promise<RecentlyWatchedEntry[]> {
+async function readAllEntries(filePath: string): Promise<HistoryEntry[]> {
   try {
-    const content = await fs.promises.readFile(filePath, "utf-8");
-    const lines = content.split("\n").filter(Boolean);
-    const entries: RecentlyWatchedEntry[] = [];
-    for (const line of lines) {
-      const entry = parseLine(line);
-      if (entry) entries.push(entry);
-    }
-    return entries;
-  } catch {
+    const raw = await fs.promises.readFile(filePath, "utf-8");
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isValidHistoryEntry);
+  } catch (err: unknown) {
+    const code =
+      err && typeof err === "object" && "code" in err ? (err as { code?: string }).code : undefined;
+    if (code === "ENOENT") return [];
     return [];
   }
 }
 
-function sortKeyMs(e: RecentlyWatchedEntry, lineIndex: number): number {
-  if (e.timestamp !== undefined) return e.timestamp;
-  // Legacy rows: preserve append order (newer line = larger index).
-  return lineIndex;
+async function writeAllEntries(filePath: string, entries: HistoryEntry[]): Promise<void> {
+  await fs.promises.writeFile(filePath, JSON.stringify(entries), "utf-8");
 }
 
 export function addRecentlyWatchedListeners() {
-  ipcMain.handle(
-    RECENTLY_WATCHED_RECORD_CHANNEL,
-    async (
-      _event,
-      id: string,
-      providerId: string,
-      episode: string,
-      mode: "sub" | "dub"
-    ) => {
-      if (
-        typeof id !== "string" ||
-        typeof providerId !== "string" ||
-        typeof episode !== "string"
-      ) {
-        return;
-      }
-      const filePath = getFilePath();
-      const ts = Date.now();
-      const line = `${id}${SEPARATOR}${providerId}${SEPARATOR}${episode}${SEPARATOR}${mode ?? "sub"}${SEPARATOR}${ts}\n`;
-      try {
-        await fs.promises.appendFile(filePath, line);
-      } catch {
-        // Ignore write errors (e.g. disk full)
-      }
-    }
-  );
-
-  ipcMain.handle(RECENTLY_WATCHED_READ_CHANNEL, async (): Promise<RecentlyWatchedEntry[]> => {
+  ipcMain.handle(RECENTLY_WATCHED_UPSERT_CHANNEL, async (_event, entry: unknown): Promise<void> => {
+    if (!isValidHistoryEntry(entry)) return;
     const filePath = getFilePath();
-    const entries = await readEntriesOldestFirst(filePath);
-    const indexed = entries.map((e, lineIndex) => ({ e, lineIndex }));
-    indexed.sort((a, b) => sortKeyMs(b.e, b.lineIndex) - sortKeyMs(a.e, a.lineIndex));
-    const seen = new Set<string>();
-    const newestUniqueFirst: RecentlyWatchedEntry[] = [];
-    for (const { e } of indexed) {
-      if (seen.has(e.id)) continue;
-      seen.add(e.id);
-      newestUniqueFirst.push(e);
-      if (newestUniqueFirst.length >= READ_UNIQUE_LIMIT) break;
+    try {
+      const existing = await readAllEntries(filePath);
+      const next = existing.filter((e) => e.id !== entry.id);
+      next.push(entry);
+      await writeAllEntries(filePath, next);
+    } catch {
+      // Ignore write errors (e.g. disk full)
     }
-    return newestUniqueFirst;
+  });
+
+  ipcMain.handle(RECENTLY_WATCHED_READ_CHANNEL, async (): Promise<HistoryEntry[]> => {
+    const filePath = getFilePath();
+    try {
+      return await readAllEntries(filePath);
+    } catch {
+      return [];
+    }
   });
 
   ipcMain.handle(RECENTLY_WATCHED_CLEAR_CHANNEL, async (): Promise<void> => {
     const filePath = getFilePath();
     try {
-      await fs.promises.writeFile(filePath, "", "utf-8");
+      await fs.promises.writeFile(filePath, "[]", "utf-8");
     } catch {
       // Ignore write errors
     }

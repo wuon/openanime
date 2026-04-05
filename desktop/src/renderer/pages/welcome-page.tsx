@@ -4,13 +4,14 @@ import { useNavigate } from "react-router-dom";
 
 import LogoRoundedSquareLight from "@/renderer/assets/logo-rounded-square-light.svg";
 import LogoRoundedSquare from "@/renderer/assets/logo-rounded-square.svg";
+import { EpisodeCard } from "@/renderer/components/episode-card";
 import { HorizontalCarousel } from "@/renderer/components/horizontal-carousel";
 import { Badge } from "@/renderer/components/ui/badge";
 import { Button } from "@/renderer/components/ui/button";
 import { Input } from "@/renderer/components/ui/input";
 import { useWelcomeRecentlyUploaded } from "@/renderer/hooks/use-welcome-recent-uploads";
 import { useWelcomeRecentlyWatched } from "@/renderer/hooks/use-welcome-recently-watched";
-import { Episode, RecentlyWatchedEntry, ShowSearchResult } from "@/shared/types";
+import type { Episode, HistoryEntry } from "@/shared/types";
 
 const RECENT_PAGE_SIZE = 12;
 
@@ -32,43 +33,20 @@ export function WelcomePage() {
 
   const openRecentAnime = useCallback(
     (episode: Episode) => {
-      const name =
-        episode.title.english ??
-        episode.title.romanji ??
-        episode.title.native ??
-        episode.providerId;
-      navigate("/watch", {
-        state: {
-          anime: {
-            id: episode.id,
-            providerId: episode.providerId,
-            name,
-            mode: episode.mode,
-          },
-          episodes: [],
-          currentEpisode: String(episode.index),
-        },
-      });
+      navigate("/watch", { state: { episode } });
     },
     [navigate]
   );
 
   const openRecentlyWatched = useCallback(
-    (entry: RecentlyWatchedEntry) => {
-      const name = recentlyWatchedDetails[entry.id]?.name ?? "Anime";
-      navigate("/watch", {
-        state: {
-          anime: { id: entry.id, providerId: entry.providerId, name, mode: entry.mode },
-          episodes: [],
-          currentEpisode: entry.episode,
-        },
-      });
+    (entry: HistoryEntry) => {
+      navigate("/watch", { state: { episode: entry.episode } });
     },
-    [navigate, recentlyWatchedDetails]
+    [navigate]
   );
 
   return (
-    <div className="container flex flex-col gap-6 p-6 md:p-8 max-w-5xl mx-auto">
+    <div className="w-full max-w-[1600px] mx-auto flex flex-col gap-6 p-6 md:p-8">
       <div className="flex flex-col items-center gap-4">
         <img
           className="h-20 w-20 shrink-0 dark:hidden select-none pointer-events-none"
@@ -127,7 +105,7 @@ export function WelcomePage() {
       <>
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Recently watched</h2>
+            <h2 className="text-lg font-semibold">Continue watching</h2>
             <Button
               variant="ghost"
               size="sm"
@@ -143,22 +121,26 @@ export function WelcomePage() {
           {recentlyWatchedLoading ? (
             <p className="text-muted-foreground text-sm">Loading…</p>
           ) : recentlyWatched.length > 0 ? (
-            <HorizontalCarousel
-              items={recentlyWatched.map((entry, index) => ({
-                id: `${entry.id}-${entry.episode}-${index}`,
-                coverUrl: recentlyWatchedDetails[entry.id]?.thumbnail ?? null,
-                title: recentlyWatchedDetails[entry.id]?.name ?? entry.id,
-                badges: (
-                  <Badge
-                    variant="glass"
-                    className="text-white flex items-center gap-1 align-middle"
-                  >
-                    {`Episode ${entry.episode} · ${entry.mode}`}
-                  </Badge>
-                ),
-                onClick: () => openRecentlyWatched(entry),
-              }))}
-            />
+            <HorizontalCarousel>
+              {recentlyWatched.map((entry: HistoryEntry) => (
+                <EpisodeCard
+                  key={entry.id}
+                  layout="carousel"
+                  thumbnailUrl={entry.episode.thumbnail}
+                  badge={`Episode ${String(entry.episode.index)}`}
+                  subtitle={
+                    recentlyWatchedDetails[entry.episode.id]?.name ??
+                    entry.episode.title.english ??
+                    entry.episode.title.romanji ??
+                    entry.episode.title.native ??
+                    entry.episode.id
+                  }
+                  onClick={() => openRecentlyWatched(entry)}
+                  totalDurationMs={entry.totalDurationMs}
+                  currentDurationMs={entry.currentDurationMs}
+                />
+              ))}
+            </HorizontalCarousel>
           ) : (
             <p className="text-muted-foreground text-sm">No recently watched anime.</p>
           )}

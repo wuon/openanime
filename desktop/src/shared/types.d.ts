@@ -10,6 +10,8 @@ interface ThemeContext {
 
 type StreamMode = "sub" | "dub";
 
+type StreamProvider = "allanime";
+
 interface Show {
   id: string;
   providerId: string;
@@ -96,17 +98,18 @@ interface AniListShowDetails {
   status?: string | null;
 }
 
-interface RecentlyWatchedEntry {
+interface HistoryEntry {
   id: string;
-  providerId: string;
-  episode: string;
-  mode: "sub" | "dub";
-  timestamp?: number;
+  provider: StreamProvider;
+  episode: Episode;
+  currentDurationMs: number;
+  totalDurationMs: number;
+  timestamp: number;
 }
 
 interface RecentlyWatchedContext {
-  record: (id: string, providerId: string, episode: string, mode?: "sub" | "dub") => Promise<void>;
-  read: () => Promise<RecentlyWatchedEntry[]>;
+  upsert: (entry: HistoryEntry) => Promise<void>;
+  read: () => Promise<HistoryEntry[]>;
   clear: () => Promise<void>;
 }
 
