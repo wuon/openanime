@@ -51,12 +51,15 @@ function buildWatchHistoryEntry(
 
 interface WatchState {
   episode: Episode;
+  /** Saved position from Continue watching (ms). */
+  resumeFromMs?: number;
 }
 
 export function WatchPage() {
   const location = useLocation();
   const goBack = useGoBack();
   const state = location.state as WatchState | null;
+  const resumeFromMs = state?.resumeFromMs;
 
   const [playUrl, setPlayUrl] = useState<string>("");
   /** Bumps when a new stream URL is ready so the <video> remounts (retry after errors). */
@@ -164,8 +167,13 @@ export function WatchPage() {
 
   useEffect(() => {
     if (!episode) return;
-    void loadStream(String(episode.index));
-  }, [episode?.id, episode?.providerId, episode?.index, episode?.mode, loadStream]);
+    const resumeFrom =
+      resumeFromMs != null && resumeFromMs > 0 ? resumeFromMs / 1000 : undefined;
+    void loadStream(
+      String(episode.index),
+      resumeFrom != null ? { resumeFrom } : undefined
+    );
+  }, [episode?.id, episode?.providerId, episode?.index, episode?.mode, loadStream, resumeFromMs]);
 
   useEffect(() => {
     if (showLoading || !episode || !playUrl) return;

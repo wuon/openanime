@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { EpisodeCard } from "@/renderer/components/episode-card";
@@ -26,7 +26,12 @@ export function WelcomePage() {
 
   const openRecentlyWatched = useCallback(
     (entry: HistoryEntry) => {
-      navigate("/watch", { state: { episode: entry.episode } });
+      navigate("/watch", {
+        state: {
+          episode: entry.episode,
+          ...(entry.currentDurationMs > 0 ? { resumeFromMs: entry.currentDurationMs } : {}),
+        },
+      });
     },
     [navigate]
   );
