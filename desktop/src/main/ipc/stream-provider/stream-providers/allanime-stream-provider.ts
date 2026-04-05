@@ -2,15 +2,13 @@
  * The following provider is a typescript port of the original allanime stream provider from pystardust/ani-cli.
  * See https://github.com/pystardust/ani-cli (allanime stream provider).
  */
+import { getElectronUserAgent } from "@/main/electron-user-agent";
 import { Episode, ShowSearchResult } from "@/shared/types";
 
+import { ALLANIME_REFERER, allAnimeGql } from "../allanime-gql";
 import { StreamMode, StreamProvider, StreamUrlResult } from "./stream-provider";
 
-const ALLANIME_REFERER = "https://allmanga.to";
 const ALLANIME_BASE = "allanime.day";
-const ALLANIME_API = `https://api.${ALLANIME_BASE}`;
-const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0";
 const IS_DEV = process.env.NODE_ENV !== "production";
 
 const EPISODE_EMBED_GQL = `query ($showId: String!, $translationType: VaildTranslationTypeEnumType!, $episodeString: String!) { episode( showId: $showId translationType: $translationType episodeString: $episodeString ) { episodeString sourceUrls } }`;
@@ -252,22 +250,6 @@ function getEpisodeCount(edge: GqlShowEdge, mode: StreamMode): number {
   return 0;
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      Referer: ALLANIME_REFERER,
-      "User-Agent": USER_AGENT,
-    },
-  });
-
-  if (!res.ok) {
-    throw new Error(`allanime request failed: ${res.status} ${res.statusText}`);
-  }
-
-  return (await res.json()) as T;
-}
-
 function decodeObfuscatedProviderPath(sourceUrl: string): string {
   const encoded = sourceUrl.startsWith("--") ? sourceUrl.slice(2) : sourceUrl;
   if (encoded.length % 2 !== 0) {
@@ -337,7 +319,7 @@ async function expandMasterM3u8(
     method: "GET",
     headers: {
       Referer: referer,
-      "User-Agent": USER_AGENT,
+      "User-Agent": getElectronUserAgent(),
     },
   });
   if (!res.ok) return null;
@@ -452,7 +434,7 @@ async function resolveSourceToCandidates(
     method: "GET",
     headers: {
       Referer: ALLANIME_REFERER,
-      "User-Agent": USER_AGENT,
+      "User-Agent": getElectronUserAgent(),
     },
   });
   if (!providerRes.ok) {
@@ -505,8 +487,7 @@ export class AllAnimeStreamProvider implements StreamProvider {
       translationType: mode,
       episodeString: episode,
     };
-    const url = `${ALLANIME_API}/api?variables=${encodeURIComponent(JSON.stringify(variables))}&query=${encodeURIComponent(EPISODE_EMBED_GQL)}`;
-    const json = await fetchJson<EpisodeResponse>(url);
+    const json = await allAnimeGql<EpisodeResponse>(variables, EPISODE_EMBED_GQL);
     logStep("episode gql fetch", episodeQueryStartedAt);
 
     const sourceFilterStartedAt = Date.now();
@@ -562,21 +543,7 @@ export class AllAnimeStreamProvider implements StreamProvider {
       countryOrigin: "ALL",
     };
 
-    const url = `${ALLANIME_API}/api?variables=${encodeURIComponent(JSON.stringify(variables))}&query=${encodeURIComponent(RECENT_UPLOADS_GQL)}`;
-
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        Referer: ALLANIME_REFERER,
-        "User-Agent": USER_AGENT,
-      },
-    });
-
-    if (!res.ok) {
-      throw new Error(`allanime API error: ${res.status} ${res.statusText}`);
-    }
-
-    const json = (await res.json()) as GqlSearchResponse;
+    const json = await allAnimeGql<GqlSearchResponse>(variables, RECENT_UPLOADS_GQL);
     const edges = json.data?.shows?.edges ?? [];
 
     const episodes = edges.map((edge) => {
@@ -607,21 +574,7 @@ export class AllAnimeStreamProvider implements StreamProvider {
       countryOrigin: "ALL",
     };
 
-    const url = `${ALLANIME_API}/api?variables=${encodeURIComponent(JSON.stringify(variables))}&query=${encodeURIComponent(SEARCH_GQL)}`;
-
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        Referer: ALLANIME_REFERER,
-        "User-Agent": USER_AGENT,
-      },
-    });
-
-    if (!res.ok) {
-      throw new Error(`allanime API error: ${res.status} ${res.statusText}`);
-    }
-
-    const json = (await res.json()) as GqlSearchResponse;
+    const json = await allAnimeGql<GqlSearchResponse>(variables, SEARCH_GQL);
     const edges = json.data?.shows?.edges ?? [];
 
     const shows = edges.map((edge) => {

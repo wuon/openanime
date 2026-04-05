@@ -3,10 +3,7 @@
  * See https://github.com/pystardust/ani-cli (search_anime function).
  */
 
-const ALLANIME_REFERER = "https://allmanga.to";
-const ALLANIME_API = "https://api.allanime.day";
-const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0";
+import { allAnimeGql } from "./allanime-gql";
 
 /**
  * Fetch episode list for a show (same API as provider episode listing).
@@ -30,21 +27,7 @@ export async function getEpisodesList(
   mode: "sub" | "dub" = "sub"
 ): Promise<string[]> {
   const variables = { showId: providerId };
-  const url = `${ALLANIME_API}/api?variables=${encodeURIComponent(JSON.stringify(variables))}&query=${encodeURIComponent(EPISODES_LIST_GQL)}`;
-
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      Referer: ALLANIME_REFERER,
-      "User-Agent": USER_AGENT,
-    },
-  });
-
-  if (!res.ok) {
-    throw new Error(`allanime API error: ${res.status} ${res.statusText}`);
-  }
-
-  const json = (await res.json()) as GqlShowDetailResponse;
+  const json = await allAnimeGql<GqlShowDetailResponse>(variables, EPISODES_LIST_GQL);
   const detail = json.data?.show?.availableEpisodesDetail?.[mode];
   if (!Array.isArray(detail)) return [];
   return [...detail].sort((a, b) => {
@@ -84,21 +67,7 @@ export interface ShowDetails {
 
 export async function getShowDetails(providerId: string): Promise<ShowDetails> {
   const variables = { showId: providerId };
-  const url = `${ALLANIME_API}/api?variables=${encodeURIComponent(JSON.stringify(variables))}&query=${encodeURIComponent(SHOW_DETAILS_GQL)}`;
-
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      Referer: ALLANIME_REFERER,
-      "User-Agent": USER_AGENT,
-    },
-  });
-
-  if (!res.ok) {
-    throw new Error(`allanime API error: ${res.status} ${res.statusText}`);
-  }
-
-  const json = (await res.json()) as GqlShowDetailsPayload;
+  const json = await allAnimeGql<GqlShowDetailsPayload>(variables, SHOW_DETAILS_GQL);
   const show = json.data?.show;
   if (!show) {
     throw new Error("Show not found");

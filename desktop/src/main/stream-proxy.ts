@@ -8,8 +8,7 @@ import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import { URL } from "url";
 
-const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0";
+import { getElectronUserAgent } from "@/main/electron-user-agent";
 
 let server: http.Server | null = null;
 let proxyPort = 0;
@@ -54,7 +53,7 @@ function handleStreamRequest(req: IncomingMessage, res: ServerResponse): void {
 
   const range = req.headers.range;
   const headers: Record<string, string> = {
-    "User-Agent": USER_AGENT,
+    "User-Agent": getElectronUserAgent(),
   };
   if (referer && referer.trim().length > 0) {
     headers.Referer = referer;
