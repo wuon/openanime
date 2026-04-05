@@ -1,7 +1,9 @@
-import { ArrowLeft, Loader2, Play, Search } from "lucide-react";
+import { ArrowLeft, Play, Search } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
+import { EpisodeCard } from "@/renderer/components/episode-card";
+import { Badge } from "@/renderer/components/ui/badge";
 import { Button } from "@/renderer/components/ui/button";
 import { Input } from "@/renderer/components/ui/input";
 import {
@@ -11,13 +13,79 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/renderer/components/ui/select";
+import { Skeleton } from "@/renderer/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/renderer/components/ui/tabs";
 import { useGoBack } from "@/renderer/hooks/use-go-back";
 import { useShowDetails } from "@/renderer/hooks/use-show-details";
 import { Show } from "@/shared/types";
 
-import { EpisodeCard } from "@/renderer/components/episode-card";
-import { Badge } from "../components/ui/badge";
+const SHOW_DETAILS_EPISODE_SKELETON_COUNT = 8;
+
+function ShowDetailsSkeleton({ onBack }: { onBack: () => void }) {
+  return (
+    <div
+      className="relative mx-auto flex w-full max-w-[1600px] flex-col gap-0 p-6 md:p-8"
+      aria-busy="true"
+      aria-label="Loading show details"
+    >
+      <div className="relative -mx-8 overflow-hidden -mt-8">
+        <div className="absolute inset-0 bg-muted" aria-hidden />
+        <div className="relative z-10 flex flex-col gap-6 p-6 md:p-8">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onBack}
+              className="text-foreground hover:bg-foreground/10"
+              aria-label="Back"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+              Back
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+            <div className="max-w-3xl space-y-4">
+              <Skeleton className="h-10 w-4/5 max-w-xl bg-foreground/10 md:h-14" />
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full max-w-2xl bg-foreground/10" />
+                <Skeleton className="h-4 w-full max-w-2xl bg-foreground/10" />
+                <Skeleton className="h-4 max-w-lg w-3/4 bg-foreground/10" />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Skeleton className="h-5 w-14 rounded-full bg-foreground/10" />
+                <Skeleton className="h-5 w-20 rounded-full bg-foreground/10" />
+                <Skeleton className="h-5 w-16 rounded-full bg-foreground/10" />
+              </div>
+              <Skeleton className="h-10 w-52 rounded-md bg-foreground/10" />
+            </div>
+            <Skeleton className="h-64 w-48 shrink-0 rounded-xl bg-foreground/10" />
+          </div>
+        </div>
+      </div>
+
+      <section className="pt-6 text-foreground md:pt-8">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <Skeleton className="h-10 w-full rounded-md md:max-w-md" />
+          <div className="flex w-full gap-2 md:w-auto">
+            <Skeleton className="h-10 flex-1 rounded-md md:w-[120px]" />
+            <Skeleton className="h-10 w-[130px] rounded-md" />
+          </div>
+        </div>
+        <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: SHOW_DETAILS_EPISODE_SKELETON_COUNT }, (_, i) => (
+            <li key={i} className="w-full">
+              <Skeleton className="h-40 w-full rounded-2xl" />
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}
 
 interface LocationState {
   anime?: Show;
@@ -119,15 +187,7 @@ export function ShowDetailsPage() {
   }
 
   if (loading && !details) {
-    return (
-      <div className="container flex flex-col items-center justify-center gap-4 p-8">
-        <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
-        <p className="text-muted-foreground text-sm">Loading…</p>
-        <Button type="button" variant="outline" onClick={goBack}>
-          Back
-        </Button>
-      </div>
-    );
+    return <ShowDetailsSkeleton onBack={goBack} />;
   }
 
   if (error && !details) {
