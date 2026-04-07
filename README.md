@@ -9,7 +9,7 @@
 [Installation](#installation) |
 [License](#license)
 
-https://github.com/user-attachments/assets/14a3e2e0-3b84-46bb-9b61-546adb8e23a2
+![Home Page Screen](./assets/home.png)
 
 Openanime is an easy-to-use desktop anime application with a provider-based architecture. The current provider implementation builds on ideas from [pystardust/ani-cli](https://github.com/pystardust/ani-cli), while keeping the app ready for additional providers over time.
 
@@ -17,6 +17,7 @@ Openanime is an easy-to-use desktop anime application with a provider-based arch
 
 - Stay up to date with the most recently uploaded anime
 - Browse and search for a specific anime series
+- Sub / dub support
 - More coming soon! Have a suggestion? [Create an issue](https://github.com/wuon/openanime/issues)
 
 ## Installation
