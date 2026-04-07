@@ -49,6 +49,12 @@ When you download an app from outside the App Store, macOS attaches a com.apple.
 
 Unfortunately I haven't had time to optimize for Linux. Please let me know if anything is broken by [reporting an issue](https://github.com/wuon/openanime/issues)!
 
+## Additional Screenshots
+
+![Search Page](./assets/search.png)
+
+![Show Details Page](./assets/show-details.png)
+
 ## License
 
 [GPL-3.0](https://github.com/wuon/openanime?tab=GPL-3.0-1-ov-file)
