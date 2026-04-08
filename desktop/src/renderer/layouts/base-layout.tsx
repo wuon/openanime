@@ -5,12 +5,11 @@ import { Outlet } from "react-router-dom";
 
 export default function BaseLayout() {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       <Titlebar />
-      <main className="flex-1 pt-12">
+      <main className="flex-1 pt-12 overflow-y-auto">
         <Outlet />
       </main>
-      <AppFooter />
     </div>
   );
 }
