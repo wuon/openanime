@@ -77,7 +77,10 @@ function HomeHeroSlide({ show, isActive }: { show: AniListShowDetails; isActive:
 
   return (
     <div
-      className="relative min-w-full shrink-0 snap-center"
+      className={cn(
+        "absolute inset-0 transition-opacity duration-500 ease-in-out",
+        isActive ? "z-10 opacity-100" : "pointer-events-none z-0 opacity-0"
+      )}
       role="group"
       aria-roledescription="slide"
       aria-label={title}
@@ -174,7 +177,6 @@ function HomeHeroSkeleton() {
 }
 
 export function HomeHeroCarousel() {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
   const activeIndexRef = useRef(0);
   const slideStartRef = useRef(Date.now());
   const advanceLockRef = useRef(false);
@@ -211,38 +213,16 @@ export function HomeHeroCarousel() {
     };
   }, []);
 
-  const updateIndexFromScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el || items.length === 0) return;
-    const w = el.clientWidth;
-    if (w <= 0) return;
-    const i = Math.round(el.scrollLeft / w);
-    setActiveIndex(Math.min(items.length - 1, Math.max(0, i)));
-  }, [items.length]);
-
   useEffect(() => {
     advanceLockRef.current = false;
     slideStartRef.current = Date.now();
   }, [activeIndex]);
 
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    updateIndexFromScroll();
-    el.addEventListener("scroll", updateIndexFromScroll, { passive: true });
-    window.addEventListener("resize", updateIndexFromScroll);
-    return () => {
-      el.removeEventListener("scroll", updateIndexFromScroll);
-      window.removeEventListener("resize", updateIndexFromScroll);
-    };
-  }, [updateIndexFromScroll, items.length]);
-
-  const scrollToIndex = useCallback(
-    (next: number, behavior: ScrollBehavior = "smooth") => {
-      const el = scrollRef.current;
-      if (!el || items.length === 0) return;
+  const goToIndex = useCallback(
+    (next: number) => {
+      if (items.length === 0) return;
       const clamped = Math.min(items.length - 1, Math.max(0, next));
-      el.scrollTo({ left: clamped * el.clientWidth, behavior });
+      setActiveIndex(clamped);
     },
     [items.length]
   );
@@ -254,11 +234,11 @@ export function HomeHeroCarousel() {
       if (elapsed >= ROTATE_MS && !advanceLockRef.current) {
         advanceLockRef.current = true;
         const next = (activeIndexRef.current + 1) % items.length;
-        scrollToIndex(next, "smooth");
+        setActiveIndex(next);
       }
     }, AUTO_ADVANCE_TICK_MS);
     return () => window.clearInterval(id);
-  }, [items.length, scrollToIndex]);
+  }, [items.length]);
 
   if (loading) {
     return (
@@ -288,10 +268,7 @@ export function HomeHeroCarousel() {
       aria-roledescription="carousel"
       aria-label="Popular this season"
     >
-      <div
-        ref={scrollRef}
-        className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth scrollbar-none"
-      >
+      <div className="relative z-0 h-full min-h-[280px] w-full md:min-h-[440px]">
         {items.map((show, i) => (
           <HomeHeroSlide key={show.id ?? i} show={show} isActive={i === activeIndex} />
         ))}
@@ -300,7 +277,7 @@ export function HomeHeroCarousel() {
       {items.length > 1 ? (
         <>
           <div
-            className="pointer-events-none absolute bottom-3 left-0 right-0 flex justify-center gap-1.5"
+            className="pointer-events-none absolute bottom-3 left-0 right-0 z-20 flex justify-center gap-1.5"
             aria-label="Slide indicators"
           >
             {items.map((show, i) => {
@@ -311,7 +288,7 @@ export function HomeHeroCarousel() {
                   type="button"
                   aria-label={`Go to slide ${i + 1}`}
                   aria-current={isActive ? "true" : undefined}
-                  onClick={() => scrollToIndex(i)}
+                  onClick={() => goToIndex(i)}
                   className={cn(
                     "pointer-events-auto h-2 shrink-0 rounded-full w-2 bg-foreground/25 hover:bg-foreground/40",
                     isActive ? "bg-foreground hover:bg-foreground/90" : ""
