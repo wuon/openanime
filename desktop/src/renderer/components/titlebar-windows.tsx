@@ -1,12 +1,13 @@
-import { cn } from "@/renderer/lib/utils";
-import React, { useEffect, useState } from "react";
 import { Minus, Square, X } from "lucide-react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import LogoRoundedSquareLight from "@/renderer/assets/logo-rounded-square-light.svg";
 import LogoRoundedSquare from "@/renderer/assets/logo-rounded-square.svg";
+import { Button } from "@/renderer/components/ui/button";
+import { Separator } from "@/renderer/components/ui/separator";
+import { cn } from "@/renderer/lib/utils";
 
-import { Button } from "./ui/button";
 import { TitlebarNavSearchHelper } from "./titlebar-nav-search-helper";
 
 export function WindowsTitlebar({
@@ -50,6 +51,8 @@ export function WindowsTitlebar({
           />
           <span className="text-xs font-semibold tracking-tight">Openanime</span>
         </Button>
+
+        <Separator orientation="vertical" className="h-4" />
 
         <TitlebarNavSearchHelper />
 
@@ -95,4 +98,3 @@ export function WindowsTitlebar({
     </div>
   );
 }
-

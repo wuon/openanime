@@ -1,5 +1,5 @@
-import React, { FormEvent, useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, Search } from "lucide-react";
+import React, { FormEvent, useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { Button } from "./ui/button";
@@ -109,4 +109,3 @@ export function TitlebarNavSearchHelper() {
     </div>
   );
 }
-

@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 
 import LogoRoundedSquareLight from "@/renderer/assets/logo-rounded-square-light.svg";
 import LogoRoundedSquare from "@/renderer/assets/logo-rounded-square.svg";
+import { Button } from "@/renderer/components/ui/button";
 import { cn } from "@/renderer/lib/utils";
 
 import { TitlebarNavSearchHelper } from "./titlebar-nav-search-helper";
+import { Separator } from "./ui/separator";
 
 export function MacTitlebar({
   children,
@@ -19,8 +21,10 @@ export function MacTitlebar({
   return (
     <div className={cn("flex w-screen min-h-12 fixed z-10 bg-background draglayer", className)}>
       <div className="flex items-center gap-2 px-4 pl-20 w-full">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           className="flex items-center gap-2 clickable"
           onClick={() => navigate("/")}
         >
@@ -37,7 +41,9 @@ export function MacTitlebar({
             draggable={false}
           />
           <span className="text-xs font-semibold tracking-tight">Openanime</span>
-        </button>
+        </Button>
+
+        <Separator orientation="vertical" className="h-4" />
 
         <TitlebarNavSearchHelper />
 
