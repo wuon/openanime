@@ -93,14 +93,14 @@
     border-radius: 6px;
     border: 3px solid hsl(var(--muted));
   }
-  *::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.7);
+  #app {
+    height: 100%;
   }
   body {
     @apply bg-background text-foreground;
-    /* Reserve space only at the viewport edge so layout doesn't shift */
     scrollbar-gutter: stable;
     user-select: none;
+    overflow: hidden;
   }
 
   .scrollbar-none {

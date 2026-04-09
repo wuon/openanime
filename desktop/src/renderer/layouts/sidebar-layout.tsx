@@ -9,13 +9,13 @@ import { SidebarInset, SidebarProvider } from "@/renderer/components/ui/sidebar"
 export default function SidebarLayout() {
   return (
     <SidebarProvider open={false}>
-      <Titlebar className="border-border border-b"></Titlebar>
+      <Titlebar className="border-border border-b"/>
       <AppSidebar />
-      <SidebarInset className="pt-12 overflow-x-hidden flex flex-col min-h-screen">
-        <main className="flex-1">
+      <SidebarInset className="pt-12 overflow-x-hidden flex flex-col h-screen overflow-hidden">
+        <main className="flex-1 overflow-y-auto">
           <Outlet />
+          <AppFooter />
         </main>
-        <AppFooter />
       </SidebarInset>
     </SidebarProvider>
   );
