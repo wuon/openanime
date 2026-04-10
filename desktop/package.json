@@ -63,6 +63,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
+    "electron-store": "^11.0.2",
     "i18next": "^23.12.2",
     "lucide-react": "^0.416.0",
     "react": "^18.3.1",

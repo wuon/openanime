@@ -1,7 +1,6 @@
 import { app, safeStorage, shell } from "electron";
-import fs from "fs";
-import path from "path";
 
+import { appStore } from "@/main/store";
 import type { AniListIntegrationStatus } from "@/shared/types";
 
 import { fetchAniListViewerName } from "./anilist-user";
@@ -19,11 +18,7 @@ export const ANILIST_OAUTH_REDIRECT_URI = `${APP_PROTOCOL}://auth/anilist/callba
 export const ANILIST_PIN_REDIRECT_URI = "https://anilist.co/api/v2/oauth/pin";
 
 const CLIENT_ID = app.isPackaged ? PROD_CLIENT_ID : DEV_CLIENT_ID;
-const TOKEN_FILENAME = "anilist-access-token.enc";
-
-function tokenFilePath(): string {
-  return path.join(app.getPath("userData"), TOKEN_FILENAME);
-}
+const ANILIST_ACCESS_TOKEN_STORE_KEY = "anilist.accessToken";
 
 export function parseAccessTokenFromUrl(url: string): string | null {
   try {
@@ -48,33 +43,30 @@ export function parseAccessTokenFromUrl(url: string): string | null {
 }
 
 export function getStoredAniListAccessToken(): string | null {
-  const file = tokenFilePath();
-  if (!fs.existsSync(file)) {
-    return null;
-  }
-  const buf = fs.readFileSync(file);
-  try {
-    if (safeStorage.isEncryptionAvailable()) {
-      return safeStorage.decryptString(buf);
+  const value = appStore.get(ANILIST_ACCESS_TOKEN_STORE_KEY);
+  const stored = typeof value === "string" ? value : undefined;
+  if (stored && stored.length > 0) {
+    try {
+      if (safeStorage.isEncryptionAvailable()) {
+        return safeStorage.decryptString(Buffer.from(stored, "base64"));
+      }
+      return stored;
+    } catch {
+      return null;
     }
-    return buf.toString("utf8");
-  } catch {
-    return null;
   }
+  return null;
 }
 
 export function saveAniListAccessToken(token: string): void {
   const payload = safeStorage.isEncryptionAvailable()
-    ? safeStorage.encryptString(token)
-    : Buffer.from(token, "utf8");
-  fs.writeFileSync(tokenFilePath(), payload);
+    ? safeStorage.encryptString(token).toString("base64")
+    : token;
+  appStore.set(ANILIST_ACCESS_TOKEN_STORE_KEY, payload);
 }
 
 export function clearAniListAccessToken(): void {
-  const file = tokenFilePath();
-  if (fs.existsSync(file)) {
-    fs.unlinkSync(file);
-  }
+  appStore.delete(ANILIST_ACCESS_TOKEN_STORE_KEY);
 }
 
 function buildAuthorizeUrl(): string {
@@ -161,7 +153,9 @@ export async function connectAniListAccount(): Promise<AniListAuthActionResult> 
   }
 }
 
-export async function submitAniListManualToken(rawToken: unknown): Promise<AniListAuthActionResult> {
+export async function submitAniListManualToken(
+  rawToken: unknown
+): Promise<AniListAuthActionResult> {
   const token = typeof rawToken === "string" ? rawToken.trim() : "";
   if (!token) {
     return { ok: false, error: "Paste an access token from the AniList pin page." };

@@ -22,6 +22,17 @@ interface Show {
   hasDub?: boolean;
 }
 
+interface Bookmark {
+  status: "watching" | "plan_to_watch" | "completed" | "rewatching" | "paused" | "dropped";
+  show: Show;
+  score?: number;
+  startedAt?: Date;
+  completedAt?: Date;
+  progress: number;
+  rewatchedCount: number;
+  notes?: string;
+}
+
 interface ShowSearchResult {
   id: string;
   providerId: string;
@@ -177,6 +188,10 @@ export interface AniListMediaPageResult {
   media: AniListShowDetails[];
 }
 
+export type AniListIntegrationStatus =
+  | { connected: false }
+  | { connected: true; username: string };
+
 interface HistoryEntry {
   id: string;
   provider: StreamProvider;
@@ -226,10 +241,16 @@ interface StreamProviderContext {
   getRecentUploads: (page: number, limit?: number) => Promise<Episode[]>;
 }
 
-interface AniListContext {
+export interface AniListContext {
   getShowDetails: (mediaId: number) => Promise<AniListShowDetails>;
   search: (variables: AniListMediaPageVariables) => Promise<AniListMediaPageResult>;
   getPopularSeason: () => Promise<AniListShowDetails[]>;
+
+  connect: () => Promise<{ ok: true } | { ok: false; error: string }>;
+  disconnect: () => Promise<void>;
+  getStatus: () => Promise<AniListIntegrationStatus>;
+  openPinAuthPage: () => Promise<void>;
+  submitManualToken: (token: string) => Promise<{ ok: true } | { ok: false; error: string }>;
 }
 
 declare global {
