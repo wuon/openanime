@@ -7,6 +7,7 @@ import type { HistoryEntry } from "@/shared/types";
 import {
   RECENTLY_WATCHED_CLEAR_CHANNEL,
   RECENTLY_WATCHED_READ_CHANNEL,
+  RECENTLY_WATCHED_REMOVE_CHANNEL,
   RECENTLY_WATCHED_UPSERT_CHANNEL,
 } from "./recently-watched-channels";
 
@@ -82,6 +83,19 @@ export function addRecentlyWatchedListeners() {
     const filePath = getFilePath();
     try {
       await fs.promises.writeFile(filePath, "[]", "utf-8");
+    } catch {
+      // Ignore write errors
+    }
+  });
+
+  ipcMain.handle(RECENTLY_WATCHED_REMOVE_CHANNEL, async (_event, id: unknown): Promise<void> => {
+    if (typeof id !== "string" || id.length === 0) return;
+    const filePath = getFilePath();
+    try {
+      const existing = await readAllEntries(filePath);
+      const next = existing.filter((e) => e.id !== id);
+      if (next.length === existing.length) return;
+      await writeAllEntries(filePath, next);
     } catch {
       // Ignore write errors
     }

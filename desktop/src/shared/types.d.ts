@@ -190,6 +190,7 @@ interface RecentlyWatchedContext {
   upsert: (entry: HistoryEntry) => Promise<void>;
   read: () => Promise<HistoryEntry[]>;
   clear: () => Promise<void>;
+  remove: (id: string) => Promise<void>;
 }
 
 interface AppContext {
