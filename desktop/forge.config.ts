@@ -11,6 +11,12 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     icon: "./public/icon",
+    protocols: [
+      {
+        name: "Openanime",
+        schemes: ["openanime"],
+      },
+    ],
     // Must match `package.json` `name` — MakerDeb looks up the binary by that name.
     // If this differs (e.g. "openanime"), the .deb step fails on Linux CI.
     executableName: "Openanime",

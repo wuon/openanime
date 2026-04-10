@@ -1,8 +1,30 @@
 import { BrowserWindow, app } from "electron";
 import path from "path";
 
+import { APP_PROTOCOL, completeAniListOAuthFromDeepLink } from "@/main/ipc/anilist/anilist-oauth";
 import { registerListeners, unregisterListeners } from "@/main/ipc/listeners";
 import { startStreamProxy } from "@/main/stream-proxy";
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+}
+
+function protocolPrefix() {
+  return `${APP_PROTOCOL}://`;
+}
+
+function findDeepLinkArg(argv: string[]): string | undefined {
+  return argv.find((arg) => arg.startsWith(protocolPrefix()));
+}
+
+function registerAppProtocol() {
+  if (process.defaultApp && process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient(APP_PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
+    return;
+  }
+  app.setAsDefaultProtocolClient(APP_PROTOCOL);
+}
 
 const createWindow = () => {
   // Create the browser window.
@@ -38,9 +60,14 @@ const createWindow = () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on("ready", () => {
+  registerAppProtocol();
   registerListeners();
   void startStreamProxy().then(() => {
     createWindow();
+    const initialDeepLink = findDeepLinkArg(process.argv);
+    if (initialDeepLink) {
+      completeAniListOAuthFromDeepLink(initialDeepLink);
+    }
   });
 });
 

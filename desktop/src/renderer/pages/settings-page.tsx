@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useState } from "react";
 
 import { ThemePicker } from "@/renderer/components/theme-picker";
 import { Button } from "@/renderer/components/ui/button";
+import { Input } from "@/renderer/components/ui/input";
 import type { AppUpdateCheckResult } from "@/shared/app-update-types";
+import type { AniListIntegrationStatus } from "@/shared/types";
 
 function openExternalUrl(url: string) {
   if (window.urlOpener) {
@@ -18,6 +20,14 @@ export function SettingsPage() {
   const [watchHistoryLoading, setWatchHistoryLoading] = useState(true);
   const [hasWatchHistory, setHasWatchHistory] = useState(false);
   const [clearHistoryBusy, setClearHistoryBusy] = useState(false);
+  const [anilistStatus, setAnilistStatus] = useState<AniListIntegrationStatus | null>(null);
+  const [anilistStatusLoading, setAnilistStatusLoading] = useState(true);
+  const [anilistConnectBusy, setAnilistConnectBusy] = useState(false);
+  const [anilistDisconnectBusy, setAnilistDisconnectBusy] = useState(false);
+  const [anilistError, setAnilistError] = useState<string | null>(null);
+  const [anilistPinToken, setAnilistPinToken] = useState("");
+  const [anilistPinOpenBusy, setAnilistPinOpenBusy] = useState(false);
+  const [anilistPinSubmitBusy, setAnilistPinSubmitBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,19 +52,93 @@ export function SettingsPage() {
   useEffect(() => {
     let cancelled = false;
     setWatchHistoryLoading(true);
-    void window.recentlyWatched.read().then((entries) => {
-      if (!cancelled) {
-        setHasWatchHistory(entries.length > 0);
-      }
-    }).finally(() => {
-      if (!cancelled) {
-        setWatchHistoryLoading(false);
-      }
-    });
+    void window.recentlyWatched
+      .read()
+      .then((entries) => {
+        if (!cancelled) {
+          setHasWatchHistory(entries.length > 0);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setWatchHistoryLoading(false);
+        }
+      });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  const refreshAnilistStatus = useCallback(async () => {
+    setAnilistStatusLoading(true);
+    try {
+      const s = await window.anilist.getStatus();
+      setAnilistStatus(s);
+      setAnilistError(null);
+    } finally {
+      setAnilistStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshAnilistStatus();
+  }, [refreshAnilistStatus]);
+
+  const onAnilistConnect = useCallback(async () => {
+    setAnilistConnectBusy(true);
+    setAnilistError(null);
+    try {
+      const result = await window.anilist.connect();
+      if (result.ok) {
+        await refreshAnilistStatus();
+      } else {
+        const { error } = result as { ok: false; error: string };
+        setAnilistError(error);
+      }
+    } finally {
+      setAnilistConnectBusy(false);
+    }
+  }, [refreshAnilistStatus]);
+
+  const onAnilistOpenPinAuth = useCallback(async () => {
+    setAnilistPinOpenBusy(true);
+    setAnilistError(null);
+    try {
+      await window.anilist.openPinAuthPage();
+    } catch (e) {
+      setAnilistError(e instanceof Error ? e.message : "Could not open AniList.");
+    } finally {
+      setAnilistPinOpenBusy(false);
+    }
+  }, []);
+
+  const onAnilistSubmitPinToken = useCallback(async () => {
+    setAnilistPinSubmitBusy(true);
+    setAnilistError(null);
+    try {
+      const result = await window.anilist.submitManualToken(anilistPinToken);
+      if (result.ok) {
+        setAnilistPinToken("");
+        await refreshAnilistStatus();
+      } else {
+        const { error } = result as { ok: false; error: string };
+        setAnilistError(error);
+      }
+    } finally {
+      setAnilistPinSubmitBusy(false);
+    }
+  }, [anilistPinToken, refreshAnilistStatus]);
+
+  const onAnilistDisconnect = useCallback(async () => {
+    setAnilistDisconnectBusy(true);
+    setAnilistError(null);
+    try {
+      await window.anilist.disconnect();
+      await refreshAnilistStatus();
+    } finally {
+      setAnilistDisconnectBusy(false);
+    }
+  }, [refreshAnilistStatus]);
 
   const onClearWatchHistory = useCallback(async () => {
     setClearHistoryBusy(true);
@@ -112,6 +196,144 @@ export function SettingsPage() {
             Could not check for updates ({updateCheck.error}).
           </p>
         )}
+      </section>
+
+      <section className="rounded-xl border border-border p-5 flex flex-col gap-6">
+        <div className="space-y-1 min-w-0">
+          <h2 className="text-sm font-medium">Integrations</h2>
+          <p className="text-sm text-muted-foreground">
+            Connect third-party services. More providers will appear here over time.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-1 min-w-0 max-w-xl">
+            <h3 className="text-sm font-medium">AniList</h3>
+            <p className="text-sm text-muted-foreground">
+              {anilistStatusLoading
+                ? "…"
+                : anilistStatus?.connected && anilistStatus.username
+                  ? `Signed in as ${anilistStatus.username}.`
+                  : "Not connected."}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:items-end sm:shrink-0 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                disabled={
+                  anilistStatusLoading ||
+                  anilistConnectBusy ||
+                  anilistDisconnectBusy ||
+                  Boolean(anilistStatus?.connected)
+                }
+                onClick={() => {
+                  void onAnilistConnect();
+                }}
+              >
+                {anilistConnectBusy ? "Connecting…" : "Connect"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                disabled={
+                  anilistStatusLoading ||
+                  anilistConnectBusy ||
+                  anilistDisconnectBusy ||
+                  !anilistStatus?.connected
+                }
+                onClick={() => {
+                  void onAnilistDisconnect();
+                }}
+              >
+                {anilistDisconnectBusy ? "Disconnecting…" : "Disconnect"}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {anilistError && (
+          <p className="text-sm text-destructive" role="alert">
+            {anilistError}
+          </p>
+        )}
+
+        <div className="border-t border-border pt-4 flex flex-col gap-3">
+          <div className="space-y-1 min-w-0 max-w-xl">
+            <h4 className="text-sm font-medium">Pin fallback</h4>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              If custom URL sign-in does not work, set your AniList client&apos;s redirect URL to{" "}
+              <code className="font-mono text-[0.8rem]">https://anilist.co/api/v2/oauth/pin</code>,
+              open AniList below, then paste the access token shown on the pin page.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto shrink-0"
+              disabled={
+                anilistStatusLoading ||
+                anilistConnectBusy ||
+                anilistDisconnectBusy ||
+                anilistPinOpenBusy ||
+                anilistPinSubmitBusy ||
+                Boolean(anilistStatus?.connected)
+              }
+              onClick={() => {
+                void onAnilistOpenPinAuth();
+              }}
+            >
+              {anilistPinOpenBusy ? "Opening…" : "Open AniList (pin)"}
+            </Button>
+            <div className="flex flex-1 flex-col gap-2 min-w-0 sm:min-w-[240px] sm:max-w-md">
+              <Input
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="Paste access token"
+                value={anilistPinToken}
+                disabled={
+                  anilistStatusLoading ||
+                  anilistConnectBusy ||
+                  anilistDisconnectBusy ||
+                  anilistPinSubmitBusy ||
+                  Boolean(anilistStatus?.connected)
+                }
+                onChange={(e) => {
+                  setAnilistPinToken(e.target.value);
+                }}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full sm:w-auto shrink-0"
+              disabled={
+                anilistStatusLoading ||
+                anilistConnectBusy ||
+                anilistDisconnectBusy ||
+                anilistPinSubmitBusy ||
+                !anilistPinToken.trim() ||
+                Boolean(anilistStatus?.connected)
+              }
+              onClick={() => {
+                void onAnilistSubmitPinToken();
+              }}
+            >
+              {anilistPinSubmitBusy ? "Saving…" : "Save token"}
+            </Button>
+          </div>
+        </div>
+
+        <div className="border-t border-border pt-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1 min-w-0">
+            <h3 className="text-sm font-medium text-muted-foreground">MyAnimeList</h3>
+            <p className="text-sm text-muted-foreground">Coming soon.</p>
+          </div>
+        </div>
       </section>
 
       <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

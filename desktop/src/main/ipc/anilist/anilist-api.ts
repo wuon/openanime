@@ -9,12 +9,17 @@ interface AniListGraphQlEnvelope<T> {
   errors?: AniListGraphQlError[];
 }
 
-export async function postAniListGraphql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+export async function postAniListGraphql<T>(
+  query: string,
+  variables: Record<string, unknown>,
+  extraHeaders?: Record<string, string>
+): Promise<T> {
   const res = await fetch(ANILIST_GRAPHQL_API, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
+      ...(extraHeaders ?? {}),
     },
     body: JSON.stringify({ query, variables }),
   });
