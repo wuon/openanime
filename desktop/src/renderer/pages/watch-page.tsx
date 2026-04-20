@@ -1,17 +1,9 @@
-import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
+import { WatchVideoPlayerShell } from "@/renderer/components/player/watch-video-player-shell";
 import { Button } from "@/renderer/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/renderer/components/ui/select";
 import { useGoBack } from "@/renderer/hooks/use-go-back";
-import { cn } from "@/renderer/lib/utils";
 import type { Episode, HistoryEntry } from "@/shared/types";
 
 import { type RichShowDetails, useShowDetails } from "../hooks/use-show-details";
@@ -19,17 +11,19 @@ import { type RichShowDetails, useShowDetails } from "../hooks/use-show-details"
 /** How many automatic reconnects after a playback error before showing the manual overlay. */
 const MAX_AUTO_RECONNECT = 5;
 
-/** Time after last pointer activity before hiding the top chrome (back, title, episode). */
-const CHROME_HIDE_AFTER_MS = 2800;
+const IS_DEV = process.env.NODE_ENV !== "production";
+const ENABLE_HLS_SERVER_TRANSCODE = true;
 
-const watchEpisodeSelectTriggerClass =
-  "h-8 w-[120px] border-white/25 bg-white/[0.12] text-white shadow-sm backdrop-blur-xl ring-offset-0 ring-offset-transparent placeholder:text-white/55 focus:ring-2 focus:ring-white/30 focus:ring-offset-0 hover:bg-white/[0.18] [&>svg]:text-white/75";
+function logPlaybackFailure(event: string, meta?: Record<string, unknown>): void {
+  if (!IS_DEV) return;
+  const suffix = meta ? ` ${JSON.stringify(meta)}` : "";
+  console.error(`[watch-playback] ${event}${suffix}`);
+}
 
-const watchEpisodeSelectContentClass =
-  "z-[120] max-h-[min(24rem,70vh)] rounded-xl border border-white/20 bg-black/50 p-1 text-white shadow-2xl shadow-black/50 backdrop-blur-2xl";
-
-const watchEpisodeSelectItemClass =
-  "rounded-lg py-2 pl-8 pr-2 text-white/95 cursor-pointer focus:bg-white/[0.14] focus:text-white data-[highlighted]:bg-white/[0.14] data-[highlighted]:text-white data-[state=checked]:bg-white/[0.08]";
+function shouldUseServerTranscode(streamUrl: string): boolean {
+  if (!ENABLE_HLS_SERVER_TRANSCODE) return false;
+  return /\.m3u8(?:$|\?)/i.test(streamUrl);
+}
 
 function buildWatchHistoryEntry(
   episode: Episode,
@@ -91,11 +85,8 @@ export function WatchPage() {
   const episodes = episode && showDetails ? (showDetails.episodes[episode.mode] ?? []) : [];
 
   const [currentEpisode, setCurrentEpisode] = useState<number>(() => episode?.index ?? 1);
-  /** Hidden after playback is ready until the first pointer move (see playUrl effect). */
-  const [chromeVisible, setChromeVisible] = useState(true);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const chromeHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastHistoryEntryRef = useRef<HistoryEntry | null>(null);
   /** Seconds to seek to after the next successful load (set before reload). */
   const resumeAfterLoadRef = useRef<number | null>(null);
@@ -137,6 +128,22 @@ export function WatchPage() {
     }
   }, []);
 
+  const applyResumeIfNeeded = useCallback((video: HTMLVideoElement) => {
+    const resume = resumeAfterLoadRef.current;
+    if (resume == null || resume <= 0 || Number.isNaN(resume)) return;
+    resumeAfterLoadRef.current = null;
+    const dur = video.duration;
+    let target = resume;
+    if (Number.isFinite(dur) && dur > 0) {
+      target = Math.min(resume, Math.max(0, dur - 0.25));
+    }
+    video.currentTime = Math.max(0, target);
+  }, []);
+
+  const handleVideoPlaying = useCallback(() => {
+    autoReconnectAttemptRef.current = 0;
+  }, []);
+
   const loadStream = useCallback(
     async (ep: string, opts?: { resumeFrom?: number | null }) => {
       if (!episode?.providerId || !ep) return;
@@ -158,7 +165,8 @@ export function WatchPage() {
           episode.mode
         );
         const base = await window.streamProvider.getStreamProxyBaseUrl();
-        const urlWithProxy = `${base}/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
+        const transcodeParam = shouldUseServerTranscode(url) ? "&transcode=1" : "";
+        const urlWithProxy = `${base}/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}${transcodeParam}`;
         setPlayUrl(urlWithProxy);
         setStreamRevision((r) => {
           const next = r + 1;
@@ -252,6 +260,14 @@ export function WatchPage() {
 
   const handleVideoError = useCallback(() => {
     const el = videoRef.current;
+    const mediaError = el?.error;
+    logPlaybackFailure("video-element-error", {
+      currentTime: el?.currentTime ?? null,
+      readyState: el?.readyState ?? null,
+      networkState: el?.networkState ?? null,
+      mediaErrorCode: mediaError?.code ?? null,
+      mediaErrorMessage: mediaError?.message ?? null,
+    });
     const t = el && !Number.isNaN(el.currentTime) && el.currentTime > 0 ? el.currentTime : 0;
     lastPlaybackTimeRef.current = t > 0 ? t : lastPlaybackTimeRef.current;
 
@@ -285,59 +301,6 @@ export function WatchPage() {
     );
   }, [clearReconnectTimeout, currentEpisode, loadStream]);
 
-  const applyResumeIfNeeded = useCallback((video: HTMLVideoElement) => {
-    const resume = resumeAfterLoadRef.current;
-    if (resume == null || resume <= 0 || Number.isNaN(resume)) return;
-    resumeAfterLoadRef.current = null;
-    const dur = video.duration;
-    let target = resume;
-    if (Number.isFinite(dur) && dur > 0) {
-      target = Math.min(resume, Math.max(0, dur - 0.25));
-    }
-    video.currentTime = Math.max(0, target);
-  }, []);
-
-  const handleVideoPlaying = useCallback(() => {
-    autoReconnectAttemptRef.current = 0;
-  }, []);
-
-  const clearChromeHideTimer = useCallback(() => {
-    if (chromeHideTimerRef.current != null) {
-      clearTimeout(chromeHideTimerRef.current);
-      chromeHideTimerRef.current = null;
-    }
-  }, []);
-
-  const scheduleChromeHide = useCallback(() => {
-    clearChromeHideTimer();
-    chromeHideTimerRef.current = setTimeout(() => {
-      chromeHideTimerRef.current = null;
-      setChromeVisible(false);
-    }, CHROME_HIDE_AFTER_MS);
-  }, [clearChromeHideTimer]);
-
-  const onWatchShellPointerActivity = useCallback(() => {
-    setChromeVisible(true);
-    if (playUrl && !playbackError) {
-      scheduleChromeHide();
-    } else {
-      clearChromeHideTimer();
-    }
-  }, [playUrl, playbackError, scheduleChromeHide, clearChromeHideTimer]);
-
-  useEffect(() => {
-    if (!playUrl || playbackError) {
-      clearChromeHideTimer();
-      setChromeVisible(true);
-      return;
-    }
-    clearChromeHideTimer();
-    setChromeVisible(false);
-    return () => {
-      clearChromeHideTimer();
-    };
-  }, [playUrl, playbackError, clearChromeHideTimer]);
-
   useEffect(() => {
     return () => {
       void syncHistoryProgress();
@@ -367,131 +330,35 @@ export function WatchPage() {
     "Unknown";
 
   return (
-    <div
-      className="relative flex flex-1 flex-col min-h-0 h-full w-full bg-black overflow-hidden"
-      onMouseMove={onWatchShellPointerActivity}
-      onPointerDown={onWatchShellPointerActivity}
-    >
-      <div className="absolute inset-0 z-0 flex items-center justify-center min-h-0">
-        {loadingEpisode && !playUrl ? (
-          <div className="flex flex-col items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-10 w-10 animate-spin" />
-            <span className="text-sm">Loading stream…</span>
-          </div>
-        ) : error && !playUrl ? (
-          <div className="flex flex-col items-center gap-3 text-destructive px-4 text-center">
-            <span className="text-sm">{error}</span>
-            <Button type="button" variant="secondary" size="sm" onClick={retryStream}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Retry
-            </Button>
-          </div>
-        ) : playUrl ? (
-          <div className="relative h-full w-full min-h-0">
-            <video
-              ref={videoRef}
-              key={streamRevision}
-              className="absolute inset-0 h-full w-full object-contain bg-black"
-              controls
-              autoPlay
-              playsInline
-              src={playUrl}
-              onLoadedMetadata={(e) => {
-                applyResumeIfNeeded(e.currentTarget);
-                void syncHistoryProgress();
-              }}
-              onPause={() => {
-                void syncHistoryProgress();
-              }}
-              onEnded={() => {
-                void syncHistoryProgress();
-              }}
-              onPlaying={handleVideoPlaying}
-              onError={handleVideoError}
-            />
-            {playbackError ? (
-              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-black/85 px-4 text-center">
-                <p className="text-sm text-white/90 max-w-md">{playbackError}</p>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  disabled={loadingEpisode}
-                  onClick={retryStream}
-                >
-                  {loadingEpisode ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Reload stream
-                    </>
-                  )}
-                </Button>
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-2 text-muted-foreground px-4 text-center">
-            <span className="text-sm">Select an episode to play</span>
-          </div>
-        )}
-      </div>
-
-      <div
-        className={cn(
-          "absolute inset-x-0 top-0 z-20 flex items-center gap-3 px-4 py-3 bg-gradient-to-b from-black/80 via-black/45 to-transparent text-white transition-opacity duration-200",
-          chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"
-        )}
-      >
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={goBack}
-          aria-label="Back"
-          className="text-white hover:bg-white/15 hover:text-white shrink-0"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <span className="text-sm font-medium truncate flex-1 min-w-0">
-          {showLoading && !showDetails ? (
-            <span className="inline-flex items-center gap-2 text-white/80 font-normal">
-              <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-              Loading show…
-            </span>
-          ) : (
-            `${displayName} (${episode.mode === "dub" ? "Dub" : "Sub"})`
-          )}
-        </span>
-        {showError && !showDetails ? (
-          <span
-            className="text-xs text-red-300 shrink-0 max-w-[200px] truncate"
-            title={showError}
-          >
-            {showError}
-          </span>
-        ) : null}
-
-        <div className="flex items-center gap-2 shrink-0">
-          <Select
-            value={currentEpisode.toString()}
-            onValueChange={onEpisodeSelect}
-            disabled={loadingEpisode || showLoading}
-          >
-            <SelectTrigger className={watchEpisodeSelectTriggerClass}>
-              <SelectValue placeholder="Episode" />
-            </SelectTrigger>
-            <SelectContent className={watchEpisodeSelectContentClass}>
-              {episodes.map((ep) => (
-                <SelectItem key={ep.index} value={ep.index.toString()} className={watchEpisodeSelectItemClass}>
-                  Episode {ep.index}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-    </div>
+    <WatchVideoPlayerShell
+      playUrl={playUrl}
+      streamRevision={streamRevision}
+      loadingEpisode={loadingEpisode}
+      streamError={error}
+      playbackError={playbackError}
+      displayName={displayName}
+      isDub={episode.mode === "dub"}
+      showLoading={showLoading}
+      hasShowDetails={Boolean(showDetails)}
+      showError={showError}
+      currentEpisode={currentEpisode}
+      episodes={episodes}
+      videoRef={videoRef}
+      onBack={goBack}
+      onEpisodeSelect={onEpisodeSelect}
+      onRetryStream={retryStream}
+      onLoadedMetadata={(e) => {
+        applyResumeIfNeeded(e.currentTarget);
+        void syncHistoryProgress();
+      }}
+      onPause={() => {
+        void syncHistoryProgress();
+      }}
+      onEnded={() => {
+        void syncHistoryProgress();
+      }}
+      onPlaying={handleVideoPlaying}
+      onError={handleVideoError}
+    />
   );
 }

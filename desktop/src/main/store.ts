@@ -2,11 +2,12 @@ import Store from "electron-store";
 
 interface AppStoreSchema {
   "anilist.accessToken"?: string;
+  "stream.provider"?: "allanime" | "animepahe";
 }
 
 type StoreApi = {
   get: (key: string) => unknown;
-  set: (key: string, value: string) => void;
+  set: (key: string, value: unknown) => void;
   delete: (key: string) => void;
 };
 

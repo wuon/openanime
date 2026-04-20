@@ -14,8 +14,7 @@ const RECENT_PAGE_SIZE = 12;
 export function WelcomePage() {
   const navigate = useNavigate();
   const { recentUploads, recentUploadsLoading } = useWelcomeRecentlyUploaded(RECENT_PAGE_SIZE);
-  const { recentlyWatched, recentlyWatchedLoading, recentlyWatchedDetails } =
-    useWelcomeRecentlyWatched();
+  const { recentlyWatched, recentlyWatchedLoading } = useWelcomeRecentlyWatched();
 
   const openRecentAnime = useCallback(
     (episode: Episode) => {
@@ -55,7 +54,6 @@ export function WelcomePage() {
                   thumbnailUrl={entry.episode.thumbnail}
                   badge={`Episode ${String(entry.episode.index)}`}
                   subtitle={
-                    recentlyWatchedDetails[entry.episode.id]?.name ??
                     entry.episode.title.english ??
                     entry.episode.title.romanji ??
                     entry.episode.title.native ??

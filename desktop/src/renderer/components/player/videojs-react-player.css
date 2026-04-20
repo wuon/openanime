@@ -1,0 +1,16 @@
+.oa-videojs-player.media-default-skin {
+  --media-border-radius: 1.25rem;
+  overflow: visible;
+}
+
+.oa-videojs-player.media-default-skin .media-controls,
+.oa-videojs-player .media-controls {
+  border-radius: 1.125rem;
+  padding-right: 0.875rem;
+  overflow: visible;
+}
+
+.oa-videojs-player.media-default-skin .media-button,
+.oa-videojs-player .media-button {
+  border-radius: 0.75rem;
+}

@@ -3,8 +3,15 @@ import React, { useCallback, useEffect, useState } from "react";
 import { ThemePicker } from "@/renderer/components/theme-picker";
 import { Button } from "@/renderer/components/ui/button";
 import { Input } from "@/renderer/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/renderer/components/ui/select";
 import type { AppUpdateCheckResult } from "@/shared/app-update-types";
-import type { AniListIntegrationStatus } from "@/shared/types";
+import type { AniListIntegrationStatus, StreamProvider } from "@/shared/types";
 
 function openExternalUrl(url: string) {
   if (window.urlOpener) {
@@ -28,6 +35,28 @@ export function SettingsPage() {
   const [anilistPinToken, setAnilistPinToken] = useState("");
   const [anilistPinOpenBusy, setAnilistPinOpenBusy] = useState(false);
   const [anilistPinSubmitBusy, setAnilistPinSubmitBusy] = useState(false);
+  const [activeStreamProvider, setActiveStreamProvider] = useState<StreamProvider>("allanime");
+  const [streamProviderLoading, setStreamProviderLoading] = useState(true);
+  const [streamProviderBusy, setStreamProviderBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.streamProvider
+      .getActiveProvider()
+      .then((provider) => {
+        if (!cancelled) {
+          setActiveStreamProvider(provider);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setStreamProviderLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,6 +185,16 @@ export function SettingsPage() {
       openExternalUrl(url);
     }
   }, [updateCheck?.releaseUrl]);
+
+  const onStreamProviderChange = useCallback(async (provider: StreamProvider) => {
+    setStreamProviderBusy(true);
+    try {
+      const next = await window.streamProvider.setActiveProvider(provider);
+      setActiveStreamProvider(next);
+    } finally {
+      setStreamProviderBusy(false);
+    }
+  }, []);
 
   return (
     <div className="w-full max-w-[1600px] mx-auto flex flex-col gap-6 p-6 md:p-8">
@@ -354,6 +393,32 @@ export function SettingsPage() {
         >
           Clear history
         </Button>
+      </section>
+
+      <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1 min-w-0">
+          <h2 className="text-sm font-medium">Streaming provider</h2>
+          <p className="text-sm text-muted-foreground">
+            Choose which upstream source is used for search, episodes, and playback.
+          </p>
+        </div>
+        <Select
+          value={activeStreamProvider}
+          onValueChange={(value) => {
+            if (value === "allanime" || value === "animepahe") {
+              void onStreamProviderChange(value);
+            }
+          }}
+          disabled={streamProviderLoading || streamProviderBusy}
+        >
+          <SelectTrigger className="sm:shrink-0 w-full sm:w-[220px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="allanime">AllAnime</SelectItem>
+            <SelectItem value="animepahe">AnimePahe</SelectItem>
+          </SelectContent>
+        </Select>
       </section>
 
       <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

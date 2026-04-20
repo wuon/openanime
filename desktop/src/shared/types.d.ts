@@ -10,7 +10,7 @@ interface ThemeContext {
 
 type StreamMode = "sub" | "dub";
 
-type StreamProvider = "allanime";
+type StreamProvider = "allanime" | "animepahe";
 
 interface Show {
   id: string;
@@ -228,6 +228,8 @@ export interface UrlOpenerContext {
 }
 
 interface StreamProviderContext {
+  getActiveProvider: () => Promise<StreamProvider>;
+  setActiveProvider: (provider: StreamProvider) => Promise<StreamProvider>;
   search: (query: string) => Promise<ShowSearchResult[]>;
   getEpisodes: (providerId: string, mode?: "sub" | "dub") => Promise<string[]>;
   getStreamUrl: (

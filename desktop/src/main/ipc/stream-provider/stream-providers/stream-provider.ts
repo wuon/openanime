@@ -1,5 +1,7 @@
 import { Episode, ShowSearchResult } from "@/shared/types";
+
 import { AllAnimeStreamProvider } from "./allanime-stream-provider";
+import { AnimePaheStreamProvider } from "./animepahe-stream-provider";
 
 export interface StreamUrlResult {
   url: string;
@@ -7,11 +9,20 @@ export interface StreamUrlResult {
 }
 
 export type StreamMode = "sub" | "dub";
+export type StreamProviderName = "allanime" | "animepahe";
 
 export interface StreamProvider {
-  getStreamUrl(id: string | null, providerId: string | null, episode: string, mode: StreamMode): Promise<StreamUrlResult>;
+  getStreamUrl(
+    id: string | null,
+    providerId: string | null,
+    episode: string,
+    mode: StreamMode
+  ): Promise<StreamUrlResult>;
   getRecentUploads(page: number, limit?: number, mode?: StreamMode): Promise<Episode[]>;
   search(query: string): Promise<ShowSearchResult[]>;
 }
 
-export const allanimeStreamProvider: StreamProvider = new AllAnimeStreamProvider();
+export const streamProviders: Record<StreamProviderName, StreamProvider> = {
+  allanime: new AllAnimeStreamProvider(),
+  animepahe: new AnimePaheStreamProvider(),
+};

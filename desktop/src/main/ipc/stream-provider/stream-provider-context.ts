@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+import { Episode, ShowSearchResult } from "@/shared/types";
+
 import {
+  STREAM_PROVIDER_ACTIVE_GET_CHANNEL,
+  STREAM_PROVIDER_ACTIVE_SET_CHANNEL,
   STREAM_PROVIDER_EPISODES_CHANNEL,
   STREAM_PROVIDER_RECENT_UPLOADS_CHANNEL,
   STREAM_PROVIDER_SEARCH_CHANNEL,
@@ -8,15 +12,23 @@ import {
   STREAM_PROVIDER_STREAM_PROXY_BASE_CHANNEL,
   STREAM_PROVIDER_STREAM_URL_CHANNEL,
 } from "./stream-provider-channels";
-import { Episode, ShowSearchResult } from "@/shared/types";
 
 export interface StreamUrlResult {
   url: string;
   referer: string;
 }
 
+export type StreamProviderName = "allanime" | "animepahe";
+
 export function exposeStreamProviderContext() {
   contextBridge.exposeInMainWorld("streamProvider", {
+    getActiveProvider: () =>
+      ipcRenderer.invoke(STREAM_PROVIDER_ACTIVE_GET_CHANNEL) as Promise<StreamProviderName>,
+    setActiveProvider: (provider: StreamProviderName) =>
+      ipcRenderer.invoke(
+        STREAM_PROVIDER_ACTIVE_SET_CHANNEL,
+        provider
+      ) as Promise<StreamProviderName>,
     search: (query: string) =>
       ipcRenderer.invoke(STREAM_PROVIDER_SEARCH_CHANNEL, query) as Promise<ShowSearchResult[]>,
     getEpisodes: (providerId: string, mode?: "sub" | "dub") =>

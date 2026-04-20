@@ -4,3 +4,5 @@ export const STREAM_PROVIDER_STREAM_URL_CHANNEL = "stream-provider:stream-url";
 export const STREAM_PROVIDER_STREAM_PROXY_BASE_CHANNEL = "stream-provider:stream-proxy-base";
 export const STREAM_PROVIDER_SHOW_DETAILS_CHANNEL = "stream-provider:show-details";
 export const STREAM_PROVIDER_RECENT_UPLOADS_CHANNEL = "stream-provider:recent-uploads";
+export const STREAM_PROVIDER_ACTIVE_GET_CHANNEL = "stream-provider:active:get";
+export const STREAM_PROVIDER_ACTIVE_SET_CHANNEL = "stream-provider:active:set";

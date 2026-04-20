@@ -4,6 +4,12 @@
  */
 
 import { allAnimeGql } from "./allanime-gql";
+import { streamProviders, StreamProviderName } from "./stream-providers/stream-provider";
+
+interface AnimePaheProviderBridge {
+  getEpisodesList(providerId: string): Promise<string[]>;
+  getShowDetails(providerId: string): Promise<ShowDetails>;
+}
 
 /**
  * Fetch episode list for a show (same API as provider episode listing).
@@ -24,8 +30,17 @@ interface GqlShowDetailResponse {
 
 export async function getEpisodesList(
   providerId: string,
+  provider: StreamProviderName,
   mode: "sub" | "dub" = "sub"
 ): Promise<string[]> {
+  if (provider === "animepahe") {
+    if (mode === "dub") {
+      return [];
+    }
+    const animepaheProvider = streamProviders.animepahe as unknown as AnimePaheProviderBridge;
+    return animepaheProvider.getEpisodesList(providerId);
+  }
+
   const variables = { showId: providerId };
   const json = await allAnimeGql<GqlShowDetailResponse>(variables, EPISODES_LIST_GQL);
   const detail = json.data?.show?.availableEpisodesDetail?.[mode];
@@ -65,7 +80,15 @@ export interface ShowDetails {
   description?: string | null;
 }
 
-export async function getShowDetails(providerId: string): Promise<ShowDetails> {
+export async function getShowDetails(
+  providerId: string,
+  provider: StreamProviderName
+): Promise<ShowDetails> {
+  if (provider === "animepahe") {
+    const animepaheProvider = streamProviders.animepahe as unknown as AnimePaheProviderBridge;
+    return animepaheProvider.getShowDetails(providerId);
+  }
+
   const variables = { showId: providerId };
   const json = await allAnimeGql<GqlShowDetailsPayload>(variables, SHOW_DETAILS_GQL);
   const show = json.data?.show;
