@@ -24,13 +24,13 @@ Openanime is an easy-to-use desktop anime application with a provider-based arch
 
 ### Windows (Experimental)
 
-[![Windows - Download](https://img.shields.io/badge/Windows-download-blue)](https://github.com/wuon/openanime/releases/download/v2.1.0-alpha/Openanime-2.1.0-alpha.Setup.exe)
+[![Windows - Download](https://img.shields.io/badge/Windows-download-blue)](https://github.com/wuon/openanime/releases/download/v2.1.1-alpha/Openanime-2.1.1-alpha.Setup.exe)
 
 This should work right out of the box, but if it doesn't feel free to [report an issue](https://github.com/wuon/openanime/issues)!
 
 ### OSX
 
-[![OSX - Download](https://img.shields.io/badge/OSX-download-blue)](https://github.com/wuon/openanime/releases/download/v2.1.0-alpha/Openanime-darwin-arm64-2.1.0-alpha.zip)
+[![OSX - Download](https://img.shields.io/badge/OSX-download-blue)](https://github.com/wuon/openanime/releases/download/v2.1.1-alpha/Openanime-darwin-arm64-2.1.1-alpha.zip)
 
 Since the application is not signed or notarized, you will have to perform this command via terminal
 
@@ -44,8 +44,8 @@ When you download an app from outside the App Store, macOS attaches a com.apple.
 
 ### Linux (Experimental)
 
-[![.rpm - Download](https://img.shields.io/badge/.rpm-download-blue)](https://github.com/wuon/openanime/releases/download/v2.1.0-alpha/Openanime-2.1.0-alpha-1.x86_64.rpm)
-[![.deb - Download](https://img.shields.io/badge/.deb-download-blue)](https://github.com/wuon/openanime/releases/download/2.1.0-alpha/openanime_2.1.0-alpha_amd64.deb)
+[![.rpm - Download](https://img.shields.io/badge/.rpm-download-blue)](https://github.com/wuon/openanime/releases/download/v2.1.1-alpha/Openanime-2.1.1-alpha-1.x86_64.rpm)
+[![.deb - Download](https://img.shields.io/badge/.deb-download-blue)](https://github.com/wuon/openanime/releases/download/2.1.1-alpha/openanime_2.1.1-alpha_amd64.deb)
 
 Unfortunately I haven't had time to optimize for Linux. Please let me know if anything is broken by [reporting an issue](https://github.com/wuon/openanime/issues)!
 
