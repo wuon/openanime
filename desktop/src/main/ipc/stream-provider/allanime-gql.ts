@@ -10,10 +10,12 @@ const IS_DEV = process.env.NODE_ENV !== "production";
 
 const TOBE_PARSED_FIELD = "tobeparsed";
 const ALLANIME_AES_ALGO = "aes-256-ctr";
+const ALLANIME_BLOB_VERSION = 0x01;
+const ALLANIME_VERSION_LENGTH = 1;
 const ALLANIME_IV_LENGTH = 12;
 const ALLANIME_AUTH_TAG_LENGTH = 16;
 const ALLANIME_COUNTER_SUFFIX = Buffer.from([0x00, 0x00, 0x00, 0x02]);
-const ALLANIME_SECRET = "SimtVuagFbGR2K7P";
+const ALLANIME_SECRET = "Xot36i3lK3:v1";
 const ALLANIME_KEY = createHash("sha256").update(ALLANIME_SECRET).digest();
 
 function parseDecryptedPayload(payload: string): unknown {
@@ -26,13 +28,25 @@ function parseDecryptedPayload(payload: string): unknown {
 
 function decryptTobeparsed(blobBase64: string): unknown {
   const blob = Buffer.from(blobBase64, "base64");
-  const minimumLength = ALLANIME_IV_LENGTH + ALLANIME_AUTH_TAG_LENGTH;
-  if (blob.length <= minimumLength) {
+  const minimumLength = ALLANIME_VERSION_LENGTH + ALLANIME_IV_LENGTH + ALLANIME_AUTH_TAG_LENGTH;
+  if (blob.length < minimumLength) {
     throw new Error("Encrypted payload is too short");
   }
+  const version = blob[0];
+  if (version !== ALLANIME_BLOB_VERSION) {
+    throw new Error(`Unsupported Allanime blob version: ${version}`);
+  }
 
-  const iv = blob.subarray(0, ALLANIME_IV_LENGTH);
-  const ciphertext = blob.subarray(ALLANIME_IV_LENGTH, blob.length - ALLANIME_AUTH_TAG_LENGTH);
+  const ivStart = ALLANIME_VERSION_LENGTH;
+  const ivEnd = ivStart + ALLANIME_IV_LENGTH;
+  const ciphertextStart = ivEnd;
+  const ciphertextEnd = blob.length - ALLANIME_AUTH_TAG_LENGTH;
+  if (ciphertextEnd < ciphertextStart) {
+    throw new Error("Encrypted payload has invalid ciphertext boundaries");
+  }
+
+  const iv = blob.subarray(ivStart, ivEnd);
+  const ciphertext = blob.subarray(ciphertextStart, ciphertextEnd);
   const ctrIv = Buffer.concat([iv, ALLANIME_COUNTER_SUFFIX]);
 
   const decipher = createDecipheriv(ALLANIME_AES_ALGO, ALLANIME_KEY, ctrIv);
