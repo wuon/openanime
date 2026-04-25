@@ -22,6 +22,7 @@ function openExternalUrl(url: string) {
 }
 
 export function SettingsPage() {
+  const isDevelopment = process.env.NODE_ENV !== "production";
   const [updateCheck, setUpdateCheck] = useState<AppUpdateCheckResult | null>(null);
   const [updateLoading, setUpdateLoading] = useState(true);
   const [watchHistoryLoading, setWatchHistoryLoading] = useState(true);
@@ -40,6 +41,11 @@ export function SettingsPage() {
   const [streamProviderBusy, setStreamProviderBusy] = useState(false);
 
   useEffect(() => {
+    if (!isDevelopment) {
+      setStreamProviderLoading(false);
+      return;
+    }
+
     let cancelled = false;
     void window.streamProvider
       .getActiveProvider()
@@ -56,7 +62,7 @@ export function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isDevelopment]);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,8 +116,13 @@ export function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    if (!isDevelopment) {
+      setAnilistStatusLoading(false);
+      return;
+    }
+
     void refreshAnilistStatus();
-  }, [refreshAnilistStatus]);
+  }, [isDevelopment, refreshAnilistStatus]);
 
   const onAnilistConnect = useCallback(async () => {
     setAnilistConnectBusy(true);
@@ -237,143 +248,145 @@ export function SettingsPage() {
         )}
       </section>
 
-      <section className="rounded-xl border border-border p-5 flex flex-col gap-6">
-        <div className="space-y-1 min-w-0">
-          <h2 className="text-sm font-medium">Integrations</h2>
-          <p className="text-sm text-muted-foreground">
-            Connect third-party services. More providers will appear here over time.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="space-y-1 min-w-0 max-w-xl">
-            <h3 className="text-sm font-medium">AniList</h3>
+      {isDevelopment && (
+        <section className="rounded-xl border border-border p-5 flex flex-col gap-6">
+          <div className="space-y-1 min-w-0">
+            <h2 className="text-sm font-medium">Integrations</h2>
             <p className="text-sm text-muted-foreground">
-              {anilistStatusLoading
-                ? "…"
-                : anilistStatus?.connected && anilistStatus.username
-                  ? `Signed in as ${anilistStatus.username}.`
-                  : "Not connected."}
+              Connect third-party services. More providers will appear here over time.
             </p>
           </div>
-          <div className="flex flex-col gap-2 sm:items-end sm:shrink-0 w-full sm:w-auto">
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <Button
-                type="button"
-                className="w-full sm:w-auto"
-                disabled={
-                  anilistStatusLoading ||
-                  anilistConnectBusy ||
-                  anilistDisconnectBusy ||
-                  Boolean(anilistStatus?.connected)
-                }
-                onClick={() => {
-                  void onAnilistConnect();
-                }}
-              >
-                {anilistConnectBusy ? "Connecting…" : "Connect"}
-              </Button>
+
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-1 min-w-0 max-w-xl">
+              <h3 className="text-sm font-medium">AniList</h3>
+              <p className="text-sm text-muted-foreground">
+                {anilistStatusLoading
+                  ? "…"
+                  : anilistStatus?.connected && anilistStatus.username
+                    ? `Signed in as ${anilistStatus.username}.`
+                    : "Not connected."}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:items-end sm:shrink-0 w-full sm:w-auto">
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  disabled={
+                    anilistStatusLoading ||
+                    anilistConnectBusy ||
+                    anilistDisconnectBusy ||
+                    Boolean(anilistStatus?.connected)
+                  }
+                  onClick={() => {
+                    void onAnilistConnect();
+                  }}
+                >
+                  {anilistConnectBusy ? "Connecting…" : "Connect"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  disabled={
+                    anilistStatusLoading ||
+                    anilistConnectBusy ||
+                    anilistDisconnectBusy ||
+                    !anilistStatus?.connected
+                  }
+                  onClick={() => {
+                    void onAnilistDisconnect();
+                  }}
+                >
+                  {anilistDisconnectBusy ? "Disconnecting…" : "Disconnect"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {anilistError && (
+            <p className="text-sm text-destructive" role="alert">
+              {anilistError}
+            </p>
+          )}
+
+          <div className="border-t border-border pt-4 flex flex-col gap-3">
+            <div className="space-y-1 min-w-0 max-w-xl">
+              <h4 className="text-sm font-medium">Pin fallback</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                If custom URL sign-in does not work, set your AniList client&apos;s redirect URL to{" "}
+                <code className="font-mono text-[0.8rem]">https://anilist.co/api/v2/oauth/pin</code>,
+                open AniList below, then paste the access token shown on the pin page.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
               <Button
                 type="button"
                 variant="outline"
-                className="w-full sm:w-auto"
+                className="w-full sm:w-auto shrink-0"
                 disabled={
                   anilistStatusLoading ||
                   anilistConnectBusy ||
                   anilistDisconnectBusy ||
-                  !anilistStatus?.connected
+                  anilistPinOpenBusy ||
+                  anilistPinSubmitBusy ||
+                  Boolean(anilistStatus?.connected)
                 }
                 onClick={() => {
-                  void onAnilistDisconnect();
+                  void onAnilistOpenPinAuth();
                 }}
               >
-                {anilistDisconnectBusy ? "Disconnecting…" : "Disconnect"}
+                {anilistPinOpenBusy ? "Opening…" : "Open AniList (pin)"}
               </Button>
-            </div>
-          </div>
-        </div>
-
-        {anilistError && (
-          <p className="text-sm text-destructive" role="alert">
-            {anilistError}
-          </p>
-        )}
-
-        <div className="border-t border-border pt-4 flex flex-col gap-3">
-          <div className="space-y-1 min-w-0 max-w-xl">
-            <h4 className="text-sm font-medium">Pin fallback</h4>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              If custom URL sign-in does not work, set your AniList client&apos;s redirect URL to{" "}
-              <code className="font-mono text-[0.8rem]">https://anilist.co/api/v2/oauth/pin</code>,
-              open AniList below, then paste the access token shown on the pin page.
-            </p>
-          </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full sm:w-auto shrink-0"
-              disabled={
-                anilistStatusLoading ||
-                anilistConnectBusy ||
-                anilistDisconnectBusy ||
-                anilistPinOpenBusy ||
-                anilistPinSubmitBusy ||
-                Boolean(anilistStatus?.connected)
-              }
-              onClick={() => {
-                void onAnilistOpenPinAuth();
-              }}
-            >
-              {anilistPinOpenBusy ? "Opening…" : "Open AniList (pin)"}
-            </Button>
-            <div className="flex flex-1 flex-col gap-2 min-w-0 sm:min-w-[240px] sm:max-w-md">
-              <Input
-                type="password"
-                autoComplete="off"
-                spellCheck={false}
-                placeholder="Paste access token"
-                value={anilistPinToken}
+              <div className="flex flex-1 flex-col gap-2 min-w-0 sm:min-w-[240px] sm:max-w-md">
+                <Input
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="Paste access token"
+                  value={anilistPinToken}
+                  disabled={
+                    anilistStatusLoading ||
+                    anilistConnectBusy ||
+                    anilistDisconnectBusy ||
+                    anilistPinSubmitBusy ||
+                    Boolean(anilistStatus?.connected)
+                  }
+                  onChange={(e) => {
+                    setAnilistPinToken(e.target.value);
+                  }}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full sm:w-auto shrink-0"
                 disabled={
                   anilistStatusLoading ||
                   anilistConnectBusy ||
                   anilistDisconnectBusy ||
                   anilistPinSubmitBusy ||
+                  !anilistPinToken.trim() ||
                   Boolean(anilistStatus?.connected)
                 }
-                onChange={(e) => {
-                  setAnilistPinToken(e.target.value);
+                onClick={() => {
+                  void onAnilistSubmitPinToken();
                 }}
-              />
+              >
+                {anilistPinSubmitBusy ? "Saving…" : "Save token"}
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="secondary"
-              className="w-full sm:w-auto shrink-0"
-              disabled={
-                anilistStatusLoading ||
-                anilistConnectBusy ||
-                anilistDisconnectBusy ||
-                anilistPinSubmitBusy ||
-                !anilistPinToken.trim() ||
-                Boolean(anilistStatus?.connected)
-              }
-              onClick={() => {
-                void onAnilistSubmitPinToken();
-              }}
-            >
-              {anilistPinSubmitBusy ? "Saving…" : "Save token"}
-            </Button>
           </div>
-        </div>
 
-        <div className="border-t border-border pt-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1 min-w-0">
-            <h3 className="text-sm font-medium text-muted-foreground">MyAnimeList</h3>
-            <p className="text-sm text-muted-foreground">Coming soon.</p>
+          <div className="border-t border-border pt-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1 min-w-0">
+              <h3 className="text-sm font-medium text-muted-foreground">MyAnimeList</h3>
+              <p className="text-sm text-muted-foreground">Coming soon.</p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1 min-w-0">
@@ -395,31 +408,33 @@ export function SettingsPage() {
         </Button>
       </section>
 
-      <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1 min-w-0">
-          <h2 className="text-sm font-medium">Streaming provider</h2>
-          <p className="text-sm text-muted-foreground">
-            Choose which upstream source is used for search, episodes, and playback.
-          </p>
-        </div>
-        <Select
-          value={activeStreamProvider}
-          onValueChange={(value) => {
-            if (value === "allanime" || value === "animepahe") {
-              void onStreamProviderChange(value);
-            }
-          }}
-          disabled={streamProviderLoading || streamProviderBusy}
-        >
-          <SelectTrigger className="sm:shrink-0 w-full sm:w-[220px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="allanime">AllAnime</SelectItem>
-            <SelectItem value="animepahe">AnimePahe</SelectItem>
-          </SelectContent>
-        </Select>
-      </section>
+      {isDevelopment && (
+        <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1 min-w-0">
+            <h2 className="text-sm font-medium">Streaming provider</h2>
+            <p className="text-sm text-muted-foreground">
+              Choose which upstream source is used for search, episodes, and playback.
+            </p>
+          </div>
+          <Select
+            value={activeStreamProvider}
+            onValueChange={(value) => {
+              if (value === "allanime" || value === "animepahe") {
+                void onStreamProviderChange(value);
+              }
+            }}
+            disabled={streamProviderLoading || streamProviderBusy}
+          >
+            <SelectTrigger className="sm:shrink-0 w-full sm:w-[220px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="allanime">AllAnime</SelectItem>
+              <SelectItem value="animepahe">AnimePahe</SelectItem>
+            </SelectContent>
+          </Select>
+        </section>
+      )}
 
       <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1 min-w-0">
