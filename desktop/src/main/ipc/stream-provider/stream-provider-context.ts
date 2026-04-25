@@ -6,16 +6,24 @@ import {
   STREAM_PROVIDER_ACTIVE_GET_CHANNEL,
   STREAM_PROVIDER_ACTIVE_SET_CHANNEL,
   STREAM_PROVIDER_EPISODES_CHANNEL,
+  STREAM_PROVIDER_PREPARE_TRANSCODE_CHANNEL,
   STREAM_PROVIDER_RECENT_UPLOADS_CHANNEL,
   STREAM_PROVIDER_SEARCH_CHANNEL,
   STREAM_PROVIDER_SHOW_DETAILS_CHANNEL,
   STREAM_PROVIDER_STREAM_PROXY_BASE_CHANNEL,
+  STREAM_PROVIDER_TRANSCODE_PROGRESS_CHANNEL,
   STREAM_PROVIDER_STREAM_URL_CHANNEL,
 } from "./stream-provider-channels";
 
 export interface StreamUrlResult {
   url: string;
   referer: string;
+}
+
+export interface TranscodeProgressResult {
+  state: "idle" | "running" | "done" | "error";
+  progressPercent: number | null;
+  message: string;
 }
 
 export type StreamProviderName = "allanime" | "animepahe";
@@ -50,6 +58,17 @@ export function exposeStreamProviderContext() {
       ) as Promise<StreamUrlResult>,
     getStreamProxyBaseUrl: () =>
       ipcRenderer.invoke(STREAM_PROVIDER_STREAM_PROXY_BASE_CHANNEL) as Promise<string>,
+    prepareTranscodedStream: (targetUrl: string, referer: string | null) =>
+      ipcRenderer.invoke(
+        STREAM_PROVIDER_PREPARE_TRANSCODE_CHANNEL as string,
+        targetUrl,
+        referer
+      ) as Promise<boolean>,
+    getTranscodeProgress: (targetUrl: string) =>
+      ipcRenderer.invoke(
+        STREAM_PROVIDER_TRANSCODE_PROGRESS_CHANNEL as string,
+        targetUrl
+      ) as Promise<TranscodeProgressResult>,
     getShowDetails: (providerId: string) =>
       ipcRenderer.invoke(STREAM_PROVIDER_SHOW_DETAILS_CHANNEL, providerId) as Promise<{
         id: string;

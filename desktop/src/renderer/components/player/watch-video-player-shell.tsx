@@ -30,6 +30,11 @@ interface WatchVideoPlayerShellProps {
   playUrl: string;
   streamRevision: number;
   loadingEpisode: boolean;
+  transcodeProgress: {
+    active: boolean;
+    progressPercent: number | null;
+    message: string;
+  } | null;
   streamError: string | null;
   playbackError: string | null;
   displayName: string;
@@ -54,6 +59,7 @@ export function WatchVideoPlayerShell({
   playUrl,
   streamRevision,
   loadingEpisode,
+  transcodeProgress,
   streamError,
   playbackError,
   displayName,
@@ -142,7 +148,29 @@ export function WatchVideoPlayerShell({
         {loadingEpisode && !playUrl ? (
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <Loader2 className="h-10 w-10 animate-spin" />
-            <span className="text-sm">Loading stream...</span>
+            <span className="text-sm">
+              {transcodeProgress?.active ? transcodeProgress.message : "Loading stream..."}
+            </span>
+            {transcodeProgress?.active ? (
+              <div className="w-[min(26rem,80vw)] pt-1">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-white/20">
+                  <div
+                    className="h-full bg-white/80 transition-[width] duration-300 ease-out"
+                    style={{
+                      width: `${Math.max(
+                        0,
+                        Math.min(100, transcodeProgress.progressPercent ?? 0)
+                      )}%`,
+                    }}
+                  />
+                </div>
+                <div className="mt-1 text-center text-xs text-white/70">
+                  {transcodeProgress.progressPercent != null
+                    ? `${Math.round(transcodeProgress.progressPercent)}%`
+                    : "Estimating..."}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : streamError && !playUrl ? (
           <div className="flex flex-col items-center gap-3 text-destructive px-4 text-center">

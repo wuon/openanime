@@ -75,6 +75,12 @@ interface StreamUrlResult {
   referer: string;
 }
 
+interface TranscodeProgressResult {
+  state: "idle" | "running" | "done" | "error";
+  progressPercent: number | null;
+  message: string;
+}
+
 interface ShowDetails {
   id: string;
   providerId: string;
@@ -239,6 +245,8 @@ interface StreamProviderContext {
     mode?: "sub" | "dub"
   ) => Promise<StreamUrlResult>;
   getStreamProxyBaseUrl: () => Promise<string>;
+  prepareTranscodedStream: (targetUrl: string, referer: string | null) => Promise<boolean>;
+  getTranscodeProgress: (targetUrl: string) => Promise<TranscodeProgressResult>;
   getShowDetails: (providerId: string) => Promise<ShowDetails>;
   getRecentUploads: (page: number, limit?: number) => Promise<Episode[]>;
 }

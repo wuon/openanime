@@ -4,7 +4,6 @@
  */
 import { spawn } from "child_process";
 import { createHash } from "crypto";
-import ffmpegPath from "ffmpeg-static";
 import { accessSync, constants, createReadStream } from "fs";
 import { mkdir, rename, stat, unlink } from "fs/promises";
 import type { IncomingMessage, ServerResponse } from "http";
@@ -21,9 +20,16 @@ let server: http.Server | null = null;
 let proxyPort = 0;
 const IS_DEV = process.env.NODE_ENV !== "production";
 const FFMPEG_BINARY = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
-const resolvedFfmpegPath = resolveFfmpegPath();
+let resolvedFfmpegPath = resolveFfmpegPath();
 const transcodeCacheDir = path.join(tmpdir(), "openanime-transcode-cache");
 const transcodeJobs = new Map<string, Promise<string>>();
+const transcodeProgress = new Map<string, TranscodeProgressSnapshot>();
+
+export interface TranscodeProgressSnapshot {
+  state: "idle" | "running" | "done" | "error";
+  progressPercent: number | null;
+  message: string;
+}
 
 export function startStreamProxy(): Promise<number> {
   if (server) return Promise.resolve(proxyPort);
@@ -44,6 +50,17 @@ export function getStreamProxyPort(): number {
 
 export function getStreamProxyBaseUrl(): string {
   return `http://127.0.0.1:${proxyPort}`;
+}
+
+export async function prepareTranscodedStream(inputUrl: string, targetUrl: string, referer: string | null) {
+  await ensureTranscodedFile(inputUrl, targetUrl, referer);
+}
+
+export function getTranscodeProgress(targetUrl: string): TranscodeProgressSnapshot {
+  const key = getTranscodeCacheKey(targetUrl);
+  const existing = transcodeProgress.get(key);
+  if (existing) return existing;
+  return { state: "idle", progressPercent: null, message: "Waiting to start..." };
 }
 
 function handleStreamRequest(req: IncomingMessage, res: ServerResponse): void {
@@ -174,12 +191,17 @@ function handleTranscodeRequest(
   referer: string | null
 ): void {
   if (!resolvedFfmpegPath) {
+    resolvedFfmpegPath = resolveFfmpegPath();
+  }
+
+  if (!resolvedFfmpegPath) {
     res.writeHead(500);
     res.end("ffmpeg binary unavailable");
     return;
   }
 
-  const hasRange = typeof req.headers.range === "string" && req.headers.range.length > 0;
+  const parsedRange = parseByteRange(req.headers.range);
+  const hasNonZeroRangeStart = parsedRange !== null && parsedRange.start > 0;
 
   void findExistingTranscodedFile(targetUrl)
     .then(async (cachedPath) => {
@@ -189,8 +211,9 @@ function handleTranscodeRequest(
         return;
       }
 
-      // For seek requests, block until a seekable file exists.
-      if (hasRange) {
+      // For true seek requests (non-zero byte offset), block until a seekable file exists.
+      // Many players issue Range: bytes=0-... during startup/metadata load; do not block those.
+      if (hasNonZeroRangeStart) {
         const filePath = await ensureTranscodedFile(inputUrl, targetUrl, referer);
         await serveFileWithRange(req, res, filePath);
         return;
@@ -228,6 +251,21 @@ function handleTranscodeRequest(
         res.destroy();
       }
     });
+}
+
+function parseByteRange(
+  rangeHeader: string | string[] | undefined
+): { start: number; end: number | null } | null {
+  if (typeof rangeHeader !== "string") return null;
+  const trimmed = rangeHeader.trim();
+  if (!trimmed) return null;
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(trimmed);
+  if (!match) return null;
+  const start = match[1] ? Number(match[1]) : 0;
+  const end = match[2] ? Number(match[2]) : null;
+  if (!Number.isFinite(start) || start < 0) return null;
+  if (end !== null && (!Number.isFinite(end) || end < 0)) return null;
+  return { start, end };
 }
 
 function streamLiveTranscode(
@@ -335,14 +373,27 @@ async function ensureTranscodedFile(
   targetUrl: string,
   referer: string | null
 ): Promise<string> {
-  const key = createHash("sha1").update(targetUrl).digest("hex");
+  const key = getTranscodeCacheKey(targetUrl);
   const finalPath = path.join(transcodeCacheDir, `${key}.mp4`);
 
   const existing = await findExistingTranscodedFile(targetUrl);
-  if (existing) return existing;
+  if (existing) {
+    transcodeProgress.set(key, {
+      state: "done",
+      progressPercent: 100,
+      message: "Transcode complete",
+    });
+    return existing;
+  }
 
   const inFlight = transcodeJobs.get(key);
   if (inFlight !== undefined) return inFlight;
+
+  transcodeProgress.set(key, {
+    state: "running",
+    progressPercent: 0,
+    message: "Starting transcode...",
+  });
 
   const job = transcodeToFile(inputUrl, targetUrl, referer, finalPath).finally(() => {
     transcodeJobs.delete(key);
@@ -352,7 +403,7 @@ async function ensureTranscodedFile(
 }
 
 async function findExistingTranscodedFile(targetUrl: string): Promise<string | null> {
-  const key = createHash("sha1").update(targetUrl).digest("hex");
+  const key = getTranscodeCacheKey(targetUrl);
   const finalPath = path.join(transcodeCacheDir, `${key}.mp4`);
   try {
     const s = await stat(finalPath);
@@ -369,6 +420,7 @@ async function transcodeToFile(
   referer: string | null,
   finalPath: string
 ): Promise<string> {
+  const key = getTranscodeCacheKey(targetUrl);
   const partialPath = `${finalPath}.partial`;
   try {
     await unlink(partialPath);
@@ -381,7 +433,10 @@ async function transcodeToFile(
   const ffmpegArgs = [
     "-hide_banner",
     "-loglevel",
-    IS_DEV ? "info" : "error",
+    "info",
+    "-nostats",
+    "-progress",
+    "pipe:2",
     "-protocol_whitelist",
     "file,http,https,tcp,tls,crypto,data",
     "-allowed_extensions",
@@ -418,14 +473,79 @@ async function transcodeToFile(
     });
 
     let stderrTail = "";
+    let totalDurationSeconds: number | null = null;
+    let progressOutTimeSeconds = 0;
+
+    const updateProgress = (percent: number | null, message: string) => {
+      transcodeProgress.set(key, {
+        state: "running",
+        progressPercent: percent,
+        message,
+      });
+    };
+
+    const updatePercentFromOutTime = () => {
+      if (totalDurationSeconds == null || totalDurationSeconds <= 0) return;
+      if (!Number.isFinite(progressOutTimeSeconds) || progressOutTimeSeconds < 0) return;
+      const rawPercent = (progressOutTimeSeconds / totalDurationSeconds) * 100;
+      const bounded = Math.max(0, Math.min(99.5, rawPercent));
+      updateProgress(Math.floor(bounded * 10) / 10, "Transcoding video...");
+    };
+
+    const parseDurationToSeconds = (raw: string): number | null => {
+      const match = /^(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)$/.exec(raw);
+      if (!match) return null;
+      const hours = Number(match[1]);
+      const minutes = Number(match[2]);
+      const seconds = Number(match[3]);
+      if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) return null;
+      return hours * 3600 + minutes * 60 + seconds;
+    };
+
     ffmpeg.stderr.on("data", (chunk) => {
-      stderrTail += String(chunk);
+      const text = String(chunk);
+      stderrTail += text;
       if (stderrTail.length > 5000) {
         stderrTail = stderrTail.slice(-5000);
+      }
+
+      const lines = text.split(/\r?\n/);
+      for (const line of lines) {
+        if (!line) continue;
+
+        const durationMatch = /Duration:\s*(\d{2}:\d{2}:\d{2}(?:\.\d+)?)/.exec(line);
+        if (durationMatch) {
+          const parsed = parseDurationToSeconds(durationMatch[1]);
+          if (parsed && parsed > 0) {
+            totalDurationSeconds = parsed;
+            updatePercentFromOutTime();
+          }
+        }
+
+        const outTimeMsMatch = /^out_time_ms=(\d+)$/i.exec(line);
+        if (outTimeMsMatch) {
+          const outMs = Number(outTimeMsMatch[1]);
+          if (Number.isFinite(outMs) && outMs >= 0) {
+            progressOutTimeSeconds = outMs / 1_000_000;
+            updatePercentFromOutTime();
+          }
+        }
+
+        const progressMatch = /^progress=(\w+)$/i.exec(line);
+        if (progressMatch?.[1]?.toLowerCase() === "continue") {
+          if (totalDurationSeconds == null) {
+            updateProgress(null, "Transcoding video...");
+          }
+        }
       }
     });
 
     ffmpeg.on("error", (err) => {
+      transcodeProgress.set(key, {
+        state: "error",
+        progressPercent: null,
+        message: "Transcode failed",
+      });
       if (IS_DEV) {
         console.warn("[stream-proxy] ffmpeg spawn error", {
           ffmpegPath: resolvedFfmpegPath,
@@ -439,9 +559,19 @@ async function transcodeToFile(
 
     ffmpeg.on("close", (code, signal) => {
       if (code === 0) {
+        transcodeProgress.set(key, {
+          state: "done",
+          progressPercent: 100,
+          message: "Transcode complete",
+        });
         resolve();
         return;
       }
+      transcodeProgress.set(key, {
+        state: "error",
+        progressPercent: null,
+        message: "Transcode failed",
+      });
       if (IS_DEV) {
         console.warn("[stream-proxy] ffmpeg transcode exited non-zero", {
           code,
@@ -459,6 +589,10 @@ async function transcodeToFile(
 
   await rename(partialPath, finalPath);
   return finalPath;
+}
+
+function getTranscodeCacheKey(targetUrl: string): string {
+  return createHash("sha1").update(targetUrl).digest("hex");
 }
 
 async function serveFileWithRange(
@@ -507,17 +641,16 @@ async function serveFileWithRange(
 
 function resolveFfmpegPath(): string | null {
   const candidates = [
-    ffmpegPath ?? "",
-    path.join(process.cwd(), "node_modules", "ffmpeg-static", FFMPEG_BINARY),
-    path.join(process.cwd(), "desktop", "node_modules", "ffmpeg-static", FFMPEG_BINARY),
+    path.join(process.resourcesPath, "bin", FFMPEG_BINARY),
+    path.join(process.cwd(), "bin", FFMPEG_BINARY),
+    path.join(process.cwd(), "desktop", "bin", FFMPEG_BINARY),
   ];
 
   for (const candidate of candidates) {
-    if (!candidate) continue;
     try {
       accessSync(candidate, constants.X_OK);
-      if (IS_DEV && candidate !== ffmpegPath) {
-        console.warn("[stream-proxy] using ffmpeg fallback path", { candidate });
+      if (IS_DEV) {
+        console.warn("[stream-proxy] using bundled ffmpeg path", { candidate });
       }
       return candidate;
     } catch {

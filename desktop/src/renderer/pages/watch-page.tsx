@@ -62,6 +62,12 @@ interface WatchState {
   resumeFromMs?: number;
 }
 
+interface TranscodeProgressInfo {
+  state: "idle" | "running" | "done" | "error";
+  progressPercent: number | null;
+  message: string;
+}
+
 export function WatchPage() {
   const location = useLocation();
   const goBack = useGoBack();
@@ -73,6 +79,11 @@ export function WatchPage() {
   const [streamRevision, setStreamRevision] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [loadingEpisode, setLoadingEpisode] = useState(false);
+  const [transcodeProgress, setTranscodeProgress] = useState<{
+    active: boolean;
+    progressPercent: number | null;
+    message: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const episode = state?.episode;
 
@@ -96,6 +107,7 @@ export function WatchPage() {
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Stream revision when load succeeded; upsert runs after show details finish loading. */
   const deferredHistoryUpsertRef = useRef<{ revision: number; ep: string } | null>(null);
+  const activeLoadTokenRef = useRef(0);
 
   const clearReconnectTimeout = useCallback(() => {
     if (reconnectTimeoutRef.current != null) {
@@ -147,6 +159,8 @@ export function WatchPage() {
   const loadStream = useCallback(
     async (ep: string, opts?: { resumeFrom?: number | null }) => {
       if (!episode?.providerId || !ep) return;
+      activeLoadTokenRef.current += 1;
+      const loadToken = activeLoadTokenRef.current;
       lastHistoryEntryRef.current = null;
       clearReconnectTimeout();
       if (opts?.resumeFrom != null && opts.resumeFrom > 0) {
@@ -155,6 +169,7 @@ export function WatchPage() {
         resumeAfterLoadRef.current = null;
       }
       setLoadingEpisode(true);
+      setTranscodeProgress(null);
       setError(null);
       setPlaybackError(null);
       try {
@@ -165,8 +180,57 @@ export function WatchPage() {
           episode.mode
         );
         const base = await window.streamProvider.getStreamProxyBaseUrl();
-        const transcodeParam = shouldUseServerTranscode(url) ? "&transcode=1" : "";
+        const shouldTranscode = shouldUseServerTranscode(url);
+        if (shouldTranscode) {
+          const streamProvider = window.streamProvider as {
+            getTranscodeProgress: (targetUrl: string) => Promise<TranscodeProgressInfo>;
+            prepareTranscodedStream: (
+              targetUrl: string,
+              streamReferer: string | null
+            ) => Promise<boolean>;
+          };
+          setTranscodeProgress({
+            active: true,
+            progressPercent: 0,
+            message: "Preparing video for playback...",
+          });
+
+          let stopPolling = false;
+          const pollProgress = async () => {
+            try {
+              const next = await streamProvider.getTranscodeProgress(url);
+              if (stopPolling || activeLoadTokenRef.current !== loadToken) return;
+              setTranscodeProgress({
+                active: next.state === "running" || next.state === "idle",
+                progressPercent: next.progressPercent,
+                message: next.message || "Transcoding video...",
+              });
+            } catch {
+              // best-effort
+            }
+          };
+
+          await pollProgress();
+          const progressInterval = setInterval(() => {
+            void pollProgress();
+          }, 500);
+          try {
+            await streamProvider.prepareTranscodedStream(url, referer);
+          } finally {
+            stopPolling = true;
+            clearInterval(progressInterval);
+          }
+          if (activeLoadTokenRef.current !== loadToken) return;
+          setTranscodeProgress({
+            active: false,
+            progressPercent: 100,
+            message: "Transcode complete",
+          });
+        }
+
+        const transcodeParam = shouldTranscode ? "&transcode=1" : "";
         const urlWithProxy = `${base}/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}${transcodeParam}`;
+        if (activeLoadTokenRef.current !== loadToken) return;
         setPlayUrl(urlWithProxy);
         setStreamRevision((r) => {
           const next = r + 1;
@@ -176,9 +240,13 @@ export function WatchPage() {
         setCurrentEpisode(Number(ep));
         lastHistoryEntryRef.current = buildWatchHistoryEntry(episode, ep, null);
       } catch (err) {
+        if (activeLoadTokenRef.current !== loadToken) return;
         setError(err instanceof Error ? err.message : "Failed to load stream");
       } finally {
-        setLoadingEpisode(false);
+        if (activeLoadTokenRef.current === loadToken) {
+          setLoadingEpisode(false);
+          setTranscodeProgress(null);
+        }
       }
     },
     [episode, clearReconnectTimeout]
@@ -191,12 +259,8 @@ export function WatchPage() {
 
   useEffect(() => {
     if (!episode) return;
-    const resumeFrom =
-      resumeFromMs != null && resumeFromMs > 0 ? resumeFromMs / 1000 : undefined;
-    void loadStream(
-      String(episode.index),
-      resumeFrom != null ? { resumeFrom } : undefined
-    );
+    const resumeFrom = resumeFromMs != null && resumeFromMs > 0 ? resumeFromMs / 1000 : undefined;
+    void loadStream(String(episode.index), resumeFrom != null ? { resumeFrom } : undefined);
   }, [episode?.id, episode?.providerId, episode?.index, episode?.mode, loadStream, resumeFromMs]);
 
   useEffect(() => {
@@ -334,6 +398,7 @@ export function WatchPage() {
       playUrl={playUrl}
       streamRevision={streamRevision}
       loadingEpisode={loadingEpisode}
+      transcodeProgress={transcodeProgress}
       streamError={error}
       playbackError={playbackError}
       displayName={displayName}
