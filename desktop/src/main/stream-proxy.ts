@@ -24,11 +24,19 @@ let resolvedFfmpegPath = resolveFfmpegPath();
 const transcodeCacheDir = path.join(tmpdir(), "openanime-transcode-cache");
 const transcodeJobs = new Map<string, Promise<string>>();
 const transcodeProgress = new Map<string, TranscodeProgressSnapshot>();
+const TRANSCODE_MAX_ATTEMPTS = 3;
+const TRANSCODE_RETRY_DELAYS_MS = [1200, 2500];
 
 export interface TranscodeProgressSnapshot {
   state: "idle" | "running" | "done" | "error";
   progressPercent: number | null;
   message: string;
+}
+
+interface TranscodeFailureDetails {
+  message: string;
+  stderr: string;
+  exitCode: number | null;
 }
 
 export function startStreamProxy(): Promise<number> {
@@ -52,7 +60,11 @@ export function getStreamProxyBaseUrl(): string {
   return `http://127.0.0.1:${proxyPort}`;
 }
 
-export async function prepareTranscodedStream(inputUrl: string, targetUrl: string, referer: string | null) {
+export async function prepareTranscodedStream(
+  inputUrl: string,
+  targetUrl: string,
+  referer: string | null
+) {
   await ensureTranscodedFile(inputUrl, targetUrl, referer);
 }
 
@@ -395,11 +407,47 @@ async function ensureTranscodedFile(
     message: "Starting transcode...",
   });
 
-  const job = transcodeToFile(inputUrl, targetUrl, referer, finalPath).finally(() => {
+  const job = transcodeToFileWithRetry(inputUrl, targetUrl, referer, finalPath).finally(() => {
     transcodeJobs.delete(key);
   });
   transcodeJobs.set(key, job);
   return job;
+}
+
+async function transcodeToFileWithRetry(
+  inputUrl: string,
+  targetUrl: string,
+  referer: string | null,
+  finalPath: string
+): Promise<string> {
+  const key = getTranscodeCacheKey(targetUrl);
+  let attempt = 1;
+  while (attempt <= TRANSCODE_MAX_ATTEMPTS) {
+    transcodeProgress.set(key, {
+      state: "running",
+      progressPercent: 0,
+      message:
+        attempt > 1
+          ? `Retrying transcode (${String(attempt)}/${String(TRANSCODE_MAX_ATTEMPTS)})...`
+          : "Starting transcode...",
+    });
+    try {
+      return await transcodeToFile(inputUrl, targetUrl, referer, finalPath);
+    } catch (err: unknown) {
+      const details = getTranscodeFailureDetails(err);
+      const retryable = isRetryableTranscodeFailure(details);
+      const canRetry = retryable && attempt < TRANSCODE_MAX_ATTEMPTS;
+      if (!canRetry) throw err;
+      const delayMs = TRANSCODE_RETRY_DELAYS_MS[attempt - 1] ?? 2500;
+      transcodeProgress.set(key, {
+        state: "running",
+        progressPercent: null,
+        message: `Upstream stream failed (${details.exitCode ?? "error"}). Retrying...`,
+      });
+      await sleep(delayMs);
+      attempt += 1;
+    }
+  }
 }
 
 async function findExistingTranscodedFile(targetUrl: string): Promise<string | null> {
@@ -498,7 +546,8 @@ async function transcodeToFile(
       const hours = Number(match[1]);
       const minutes = Number(match[2]);
       const seconds = Number(match[3]);
-      if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) return null;
+      if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds))
+        return null;
       return hours * 3600 + minutes * 60 + seconds;
     };
 
@@ -583,7 +632,13 @@ async function transcodeToFile(
           stderr: stderrTail || null,
         });
       }
-      reject(new Error(`ffmpeg exited with code ${String(code)}`));
+      reject(
+        createTranscodeFailureError(
+          `ffmpeg exited with code ${String(code)}`,
+          stderrTail,
+          code ?? null
+        )
+      );
     });
   });
 
@@ -593,6 +648,50 @@ async function transcodeToFile(
 
 function getTranscodeCacheKey(targetUrl: string): string {
   return createHash("sha1").update(targetUrl).digest("hex");
+}
+
+function getTranscodeFailureDetails(err: unknown): TranscodeFailureDetails {
+  if (err && typeof err === "object") {
+    const e = err as {
+      message?: unknown;
+      stderr?: unknown;
+      exitCode?: unknown;
+    };
+    const message = typeof e.message === "string" ? e.message : "Transcode failed";
+    const stderr = typeof e.stderr === "string" ? e.stderr : "";
+    const exitCode = typeof e.exitCode === "number" ? e.exitCode : null;
+    return { message, stderr, exitCode };
+  }
+  return { message: String(err), stderr: "", exitCode: null };
+}
+
+function createTranscodeFailureError(
+  message: string,
+  stderr: string,
+  exitCode: number | null
+): Error & { stderr: string; exitCode: number | null } {
+  const error = new Error(message) as Error & { stderr: string; exitCode: number | null };
+  error.stderr = stderr;
+  error.exitCode = exitCode;
+  return error;
+}
+
+function isRetryableTranscodeFailure(details: TranscodeFailureDetails): boolean {
+  const haystack = `${details.message}\n${details.stderr}`.toLowerCase();
+  return (
+    /http error 5\d\d/.test(haystack) ||
+    haystack.includes("server returned 5xx") ||
+    haystack.includes("temporarily unavailable") ||
+    haystack.includes("connection reset") ||
+    haystack.includes("network is unreachable") ||
+    haystack.includes("timed out")
+  );
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 async function serveFileWithRange(
@@ -720,7 +819,11 @@ function toAbsoluteUrl(url: string, baseUrl: string): string {
 function isBenignStreamError(err: unknown): boolean {
   if (!err) return false;
 
-  if (typeof DOMException !== "undefined" && err instanceof DOMException && err.name === "AbortError") {
+  if (
+    typeof DOMException !== "undefined" &&
+    err instanceof DOMException &&
+    err.name === "AbortError"
+  ) {
     return true;
   }
 
