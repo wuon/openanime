@@ -112,7 +112,11 @@ function canonicalizeRichShowDetails(
   };
 }
 
-export function useShowDetails(animeId?: string, providerId?: string): UseShowDetailsResult {
+export function useShowDetails(
+  animeId?: string,
+  providerId?: string,
+  providerOverride?: "allanime" | "animepahe"
+): UseShowDetailsResult {
   const [details, setDetails] = useState<RichShowDetails | null>(null);
   const [episodesByMode, setEpisodesByMode] = useState<Record<AnimeMode, EpisodesState>>({
     sub: { status: "idle" },
@@ -139,9 +143,9 @@ export function useShowDetails(animeId?: string, providerId?: string): UseShowDe
     const shouldFetchAniList = Number.isInteger(mediaId) && mediaId > 0;
 
     void Promise.allSettled([
-      window.streamProvider.getShowDetails(providerId),
-      window.streamProvider.getEpisodes(providerId, "sub"),
-      window.streamProvider.getEpisodes(providerId, "dub"),
+      window.streamProvider.getShowDetails(providerId, providerOverride),
+      window.streamProvider.getEpisodes(providerId, "sub", providerOverride),
+      window.streamProvider.getEpisodes(providerId, "dub", providerOverride),
       shouldFetchAniList ? window.anilist.getShowDetails(mediaId) : Promise.resolve(null),
     ])
       .then(([detailsResult, subResult, dubResult, aniListResult]) => {
@@ -204,7 +208,7 @@ export function useShowDetails(animeId?: string, providerId?: string): UseShowDe
     return () => {
       cancelled = true;
     };
-  }, [animeId, providerId]);
+  }, [animeId, providerId, providerOverride]);
 
   return { details, episodesByMode, loading, error };
 }

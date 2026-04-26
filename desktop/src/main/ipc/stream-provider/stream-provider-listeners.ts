@@ -1,14 +1,12 @@
-import {
-  getEpisodesList,
-  getShowDetails,
-} from "@/main/ipc/stream-provider/stream-provider-search";
+import { ipcMain } from "electron";
+
+import { getEpisodesList, getShowDetails } from "@/main/ipc/stream-provider/stream-provider-search";
 import { appStore } from "@/main/store";
 import {
-  getTranscodeProgress,
   getStreamProxyBaseUrl,
+  getTranscodeProgress,
   prepareTranscodedStream,
 } from "@/main/stream-proxy";
-import { ipcMain } from "electron";
 
 import {
   STREAM_PROVIDER_ACTIVE_GET_CHANNEL,
@@ -19,10 +17,10 @@ import {
   STREAM_PROVIDER_SEARCH_CHANNEL,
   STREAM_PROVIDER_SHOW_DETAILS_CHANNEL,
   STREAM_PROVIDER_STREAM_PROXY_BASE_CHANNEL,
-  STREAM_PROVIDER_TRANSCODE_PROGRESS_CHANNEL,
   STREAM_PROVIDER_STREAM_URL_CHANNEL,
+  STREAM_PROVIDER_TRANSCODE_PROGRESS_CHANNEL,
 } from "./stream-provider-channels";
-import { streamProviders, StreamProviderName } from "./stream-providers/stream-provider";
+import { StreamProviderName, streamProviders } from "./stream-providers/stream-provider";
 
 const DEFAULT_STREAM_PROVIDER: StreamProviderName = "allanime";
 
@@ -51,15 +49,31 @@ export function addStreamProviderListeners() {
   });
   ipcMain.handle(
     STREAM_PROVIDER_EPISODES_CHANNEL,
-    (_event, providerId: string, mode: "sub" | "dub") => {
-      const providerName = getActiveStreamProviderName();
+    (
+      _event,
+      providerId: string,
+      mode: "sub" | "dub",
+      providerOverride?: StreamProviderName
+    ) => {
+      const providerName = providerOverride
+        ? normalizeProvider(providerOverride)
+        : getActiveStreamProviderName();
       return getEpisodesList(providerId, providerName, mode);
     }
   );
   ipcMain.handle(
     STREAM_PROVIDER_STREAM_URL_CHANNEL,
-    (_event, id: string | null, providerId: string | null, episode: string, mode: "sub" | "dub") => {
-      const providerName = getActiveStreamProviderName();
+    (
+      _event,
+      id: string | null,
+      providerId: string | null,
+      episode: string,
+      mode: "sub" | "dub",
+      providerOverride?: StreamProviderName
+    ) => {
+      const providerName = providerOverride
+        ? normalizeProvider(providerOverride)
+        : getActiveStreamProviderName();
       return streamProviders[providerName].getStreamUrl(id, providerId, episode, mode);
     }
   );
@@ -75,10 +89,15 @@ export function addStreamProviderListeners() {
   ipcMain.handle(STREAM_PROVIDER_TRANSCODE_PROGRESS_CHANNEL, (_event, targetUrl: string) => {
     return getTranscodeProgress(targetUrl);
   });
-  ipcMain.handle(STREAM_PROVIDER_SHOW_DETAILS_CHANNEL, (_event, providerId: string) => {
-    const providerName = getActiveStreamProviderName();
-    return getShowDetails(providerId, providerName);
-  });
+  ipcMain.handle(
+    STREAM_PROVIDER_SHOW_DETAILS_CHANNEL,
+    (_event, providerId: string, providerOverride?: StreamProviderName) => {
+      const providerName = providerOverride
+        ? normalizeProvider(providerOverride)
+        : getActiveStreamProviderName();
+      return getShowDetails(providerId, providerName);
+    }
+  );
   ipcMain.handle(STREAM_PROVIDER_RECENT_UPLOADS_CHANNEL, (_event, page: number, limit?: number) => {
     const providerName = getActiveStreamProviderName();
     return streamProviders[providerName].getRecentUploads(page, limit ?? 12);

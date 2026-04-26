@@ -28,6 +28,7 @@ export function WelcomePage() {
       navigate("/watch", {
         state: {
           episode: entry.episode,
+          providerOverride: entry.provider,
           ...(entry.currentDurationMs > 0 ? { resumeFromMs: entry.currentDurationMs } : {}),
         },
       });
@@ -59,7 +60,9 @@ export function WelcomePage() {
                     entry.episode.title.native ??
                     entry.episode.id
                   }
-                  onClick={() => openRecentlyWatched(entry)}
+                  onClick={() => {
+                    void openRecentlyWatched(entry);
+                  }}
                   totalDurationMs={entry.totalDurationMs}
                   currentDurationMs={entry.currentDurationMs}
                 />

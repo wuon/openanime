@@ -39,22 +39,27 @@ export function exposeStreamProviderContext() {
       ) as Promise<StreamProviderName>,
     search: (query: string) =>
       ipcRenderer.invoke(STREAM_PROVIDER_SEARCH_CHANNEL, query) as Promise<ShowSearchResult[]>,
-    getEpisodes: (providerId: string, mode?: "sub" | "dub") =>
-      ipcRenderer.invoke(STREAM_PROVIDER_EPISODES_CHANNEL, providerId, mode ?? "sub") as Promise<
-        string[]
-      >,
+    getEpisodes: (providerId: string, mode?: "sub" | "dub", providerName?: StreamProviderName) =>
+      ipcRenderer.invoke(
+        STREAM_PROVIDER_EPISODES_CHANNEL,
+        providerId,
+        mode ?? "sub",
+        providerName
+      ) as Promise<string[]>,
     getStreamUrl: (
       id: string | null,
       providerId: string | null,
       episode: string,
-      mode?: "sub" | "dub"
+      mode?: "sub" | "dub",
+      providerName?: StreamProviderName
     ) =>
       ipcRenderer.invoke(
         STREAM_PROVIDER_STREAM_URL_CHANNEL,
         id,
         providerId,
         episode,
-        mode ?? "sub"
+        mode ?? "sub",
+        providerName
       ) as Promise<StreamUrlResult>,
     getStreamProxyBaseUrl: () =>
       ipcRenderer.invoke(STREAM_PROVIDER_STREAM_PROXY_BASE_CHANNEL) as Promise<string>,
@@ -69,8 +74,12 @@ export function exposeStreamProviderContext() {
         STREAM_PROVIDER_TRANSCODE_PROGRESS_CHANNEL as string,
         targetUrl
       ) as Promise<TranscodeProgressResult>,
-    getShowDetails: (providerId: string) =>
-      ipcRenderer.invoke(STREAM_PROVIDER_SHOW_DETAILS_CHANNEL, providerId) as Promise<{
+    getShowDetails: (providerId: string, providerName?: StreamProviderName) =>
+      ipcRenderer.invoke(
+        STREAM_PROVIDER_SHOW_DETAILS_CHANNEL,
+        providerId,
+        providerName
+      ) as Promise<{
         id: string;
         providerId: string;
         name: string;

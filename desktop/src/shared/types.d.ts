@@ -194,9 +194,7 @@ export interface AniListMediaPageResult {
   media: AniListShowDetails[];
 }
 
-export type AniListIntegrationStatus =
-  | { connected: false }
-  | { connected: true; username: string };
+export type AniListIntegrationStatus = { connected: false } | { connected: true; username: string };
 
 interface HistoryEntry {
   id: string;
@@ -237,17 +235,22 @@ interface StreamProviderContext {
   getActiveProvider: () => Promise<StreamProvider>;
   setActiveProvider: (provider: StreamProvider) => Promise<StreamProvider>;
   search: (query: string) => Promise<ShowSearchResult[]>;
-  getEpisodes: (providerId: string, mode?: "sub" | "dub") => Promise<string[]>;
+  getEpisodes: (
+    providerId: string,
+    mode?: "sub" | "dub",
+    providerName?: StreamProvider
+  ) => Promise<string[]>;
   getStreamUrl: (
     id: string | null,
     providerId: string | null,
     episode: string,
-    mode?: "sub" | "dub"
+    mode?: "sub" | "dub",
+    providerName?: StreamProvider
   ) => Promise<StreamUrlResult>;
   getStreamProxyBaseUrl: () => Promise<string>;
   prepareTranscodedStream: (targetUrl: string, referer: string | null) => Promise<boolean>;
   getTranscodeProgress: (targetUrl: string) => Promise<TranscodeProgressResult>;
-  getShowDetails: (providerId: string) => Promise<ShowDetails>;
+  getShowDetails: (providerId: string, providerName?: StreamProvider) => Promise<ShowDetails>;
   getRecentUploads: (page: number, limit?: number) => Promise<Episode[]>;
 }
 

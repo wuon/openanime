@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 import { WatchVideoPlayerShell } from "@/renderer/components/player/watch-video-player-shell";
@@ -28,6 +28,7 @@ function shouldUseServerTranscode(streamUrl: string): boolean {
 function buildWatchHistoryEntry(
   episode: Episode,
   ep: string,
+  provider: HistoryEntry["provider"],
   showDetails: RichShowDetails | null
 ): HistoryEntry {
   const index = Number(ep);
@@ -38,8 +39,8 @@ function buildWatchHistoryEntry(
     rich?.thumbnail ?? showDetails?.coverImage ?? showDetails?.bannerImage ?? episode.thumbnail;
 
   return {
-    id: `${episode.id}-${ep}`,
-    provider: "allanime",
+    id: `${provider}:${episode.id}-${ep}`,
+    provider,
     episode: {
       ...episode,
       index,
@@ -60,6 +61,8 @@ interface WatchState {
   episode: Episode;
   /** Saved position from Continue watching (ms). */
   resumeFromMs?: number;
+  /** Optional stream provider override for this watch session only. */
+  providerOverride?: HistoryEntry["provider"];
 }
 
 interface TranscodeProgressInfo {
@@ -73,6 +76,7 @@ export function WatchPage() {
   const goBack = useGoBack();
   const state = location.state as WatchState | null;
   const resumeFromMs = state?.resumeFromMs;
+  const streamProviderOverride = state?.providerOverride;
 
   const [playUrl, setPlayUrl] = useState<string>("");
   /** Bumps when a new stream URL is ready so the <video> remounts (retry after errors). */
@@ -89,11 +93,23 @@ export function WatchPage() {
 
   const {
     details: showDetails,
+    episodesByMode,
     loading: showLoading,
     error: showError,
-  } = useShowDetails(episode?.id, episode?.providerId);
+  } = useShowDetails(episode?.id, episode?.providerId, streamProviderOverride);
 
-  const episodes = episode && showDetails ? (showDetails.episodes[episode.mode] ?? []) : [];
+  const episodes = useMemo(() => {
+    if (!episode) return [];
+    const richEpisodes = showDetails?.episodes[episode.mode] ?? [];
+    if (richEpisodes.length > 0) return richEpisodes;
+
+    const rawState = episodesByMode[episode.mode];
+    if (rawState.status !== "loaded") return [];
+    return rawState.episodes.map((rawEpisode, idx) => {
+      const parsed = Number(rawEpisode);
+      return { index: Number.isFinite(parsed) ? parsed : idx + 1 };
+    });
+  }, [episode, showDetails, episodesByMode]);
 
   const [currentEpisode, setCurrentEpisode] = useState<number>(() => episode?.index ?? 1);
 
@@ -108,6 +124,7 @@ export function WatchPage() {
   /** Stream revision when load succeeded; upsert runs after show details finish loading. */
   const deferredHistoryUpsertRef = useRef<{ revision: number; ep: string } | null>(null);
   const activeLoadTokenRef = useRef(0);
+  const historyProviderRef = useRef<HistoryEntry["provider"]>("allanime");
 
   const clearReconnectTimeout = useCallback(() => {
     if (reconnectTimeoutRef.current != null) {
@@ -161,6 +178,8 @@ export function WatchPage() {
       if (!episode?.providerId || !ep) return;
       activeLoadTokenRef.current += 1;
       const loadToken = activeLoadTokenRef.current;
+      setCurrentEpisode(Number(ep));
+      setPlayUrl("");
       lastHistoryEntryRef.current = null;
       clearReconnectTimeout();
       if (opts?.resumeFrom != null && opts.resumeFrom > 0) {
@@ -177,8 +196,11 @@ export function WatchPage() {
           episode.id,
           episode.providerId,
           ep,
-          episode.mode
+          episode.mode,
+          streamProviderOverride
         );
+        historyProviderRef.current =
+          streamProviderOverride ?? (await window.streamProvider.getActiveProvider());
         const base = await window.streamProvider.getStreamProxyBaseUrl();
         const shouldTranscode = shouldUseServerTranscode(url);
         if (shouldTranscode) {
@@ -237,8 +259,12 @@ export function WatchPage() {
           deferredHistoryUpsertRef.current = { revision: next, ep };
           return next;
         });
-        setCurrentEpisode(Number(ep));
-        lastHistoryEntryRef.current = buildWatchHistoryEntry(episode, ep, null);
+        lastHistoryEntryRef.current = buildWatchHistoryEntry(
+          episode,
+          ep,
+          historyProviderRef.current,
+          null
+        );
       } catch (err) {
         if (activeLoadTokenRef.current !== loadToken) return;
         setError(err instanceof Error ? err.message : "Failed to load stream");
@@ -249,7 +275,7 @@ export function WatchPage() {
         }
       }
     },
-    [episode, clearReconnectTimeout]
+    [episode, clearReconnectTimeout, streamProviderOverride]
   );
 
   useEffect(() => {
@@ -269,7 +295,12 @@ export function WatchPage() {
     if (!pending || pending.revision !== streamRevision) return;
 
     const prev = lastHistoryEntryRef.current;
-    const entry = buildWatchHistoryEntry(episode, pending.ep, showDetails);
+    const entry = buildWatchHistoryEntry(
+      episode,
+      pending.ep,
+      historyProviderRef.current,
+      showDetails
+    );
     const video = videoRef.current;
     if (video && !Number.isNaN(video.currentTime) && video.currentTime > 0) {
       entry.currentDurationMs = Math.max(

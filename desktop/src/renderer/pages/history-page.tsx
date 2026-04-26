@@ -252,6 +252,7 @@ export function HistoryPage() {
       navigate("/watch", {
         state: {
           episode: entry.episode,
+          providerOverride: entry.provider,
           ...(entry.currentDurationMs > 0 ? { resumeFromMs: entry.currentDurationMs } : {}),
         },
       });
@@ -260,10 +261,13 @@ export function HistoryPage() {
   );
 
   const goToShow = useCallback(
-    (entry: HistoryEntry) => {
-      navigate(
-        `/show/${encodeURIComponent(entry.episode.id)}?providerId=${encodeURIComponent(entry.episode.providerId)}`
-      );
+    async (entry: HistoryEntry) => {
+      try {
+        await window.streamProvider.setActiveProvider(entry.provider);
+      } catch {
+        // best-effort; show route also carries providerId
+      }
+      navigate(`/show/${encodeURIComponent(entry.episode.id)}?providerId=${encodeURIComponent(entry.episode.providerId)}`);
     },
     [navigate]
   );
@@ -330,7 +334,9 @@ export function HistoryPage() {
                     <tr
                       key={entry.id}
                       className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
-                      onClick={() => openEntry(entry)}
+                      onClick={() => {
+                        void openEntry(entry);
+                      }}
                     >
                       <td className="px-4 py-3 w-0 align-middle">
                         <div
@@ -390,14 +396,14 @@ export function HistoryPage() {
                           <DropdownMenuContent align="end" sideOffset={4} className="min-w-[12rem]">
                             <DropdownMenuItem
                               onSelect={() => {
-                                openEntry(entry);
+                                void openEntry(entry);
                               }}
                             >
                               Go to episode
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onSelect={() => {
-                                goToShow(entry);
+                                void goToShow(entry);
                               }}
                             >
                               Go to show
