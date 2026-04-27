@@ -82,6 +82,12 @@ export async function prepareTranscodedStream(
   targetUrl: string,
   referer: string | null
 ) {
+  if (!resolvedFfmpegPath) {
+    resolvedFfmpegPath = resolveFfmpegPath();
+  }
+  if (!resolvedFfmpegPath) {
+    throw new Error("ffmpeg binary unavailable");
+  }
   await ensureTranscodedFile(inputUrl, targetUrl, referer);
 }
 
@@ -482,6 +488,12 @@ async function transcodeToFile(
   referer: string | null,
   finalPath: string
 ): Promise<string> {
+  if (!resolvedFfmpegPath) {
+    resolvedFfmpegPath = resolveFfmpegPath();
+  }
+  if (!resolvedFfmpegPath) {
+    throw new Error("ffmpeg binary unavailable");
+  }
   const key = getTranscodeCacheKey(targetUrl);
   const partialPath = `${finalPath}.partial`;
   try {
@@ -750,7 +762,10 @@ async function serveFileWithRange(
 }
 
 function resolveFfmpegPath(): string | null {
+  const accessMode = IS_WINDOWS ? constants.F_OK : constants.X_OK;
   const candidates = [
+    // Electron Forge extraResource places "bin/ffmpeg.exe" at "resources/ffmpeg.exe".
+    path.join(process.resourcesPath, FFMPEG_BINARY),
     path.join(process.resourcesPath, "bin", FFMPEG_BINARY),
     path.join(process.cwd(), "bin", FFMPEG_BINARY),
     path.join(process.cwd(), "desktop", "bin", FFMPEG_BINARY),
@@ -758,7 +773,7 @@ function resolveFfmpegPath(): string | null {
 
   for (const candidate of candidates) {
     try {
-      accessSync(candidate, constants.X_OK);
+      accessSync(candidate, accessMode);
       if (IS_DEV) {
         console.warn("[stream-proxy] using bundled ffmpeg path", { candidate });
       }
