@@ -19,6 +19,7 @@ import { getElectronUserAgent } from "@/main/electron-user-agent";
 let server: http.Server | null = null;
 let proxyPort = 0;
 const IS_DEV = process.env.NODE_ENV !== "production";
+const IS_WINDOWS = process.platform === "win32";
 const FFMPEG_BINARY = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
 let resolvedFfmpegPath = resolveFfmpegPath();
 const transcodeCacheDir = path.join(tmpdir(), "openanime-transcode-cache");
@@ -26,6 +27,22 @@ const transcodeJobs = new Map<string, Promise<string>>();
 const transcodeProgress = new Map<string, TranscodeProgressSnapshot>();
 const TRANSCODE_MAX_ATTEMPTS = 3;
 const TRANSCODE_RETRY_DELAYS_MS = [1200, 2500];
+
+function getInputPermissiveHlsArgs(): string[] {
+  const args = [
+    "-protocol_whitelist",
+    "file,http,https,tcp,tls,crypto,data",
+    // Allow HLS segments fetched through our local proxy path (/stream), which has no extension.
+    "-extension_picky",
+    "0",
+    "-allowed_extensions",
+    "ALL",
+  ];
+  if (IS_WINDOWS) {
+    args.push("-allowed_segment_extensions", "ALL");
+  }
+  return args;
+}
 
 export interface TranscodeProgressSnapshot {
   state: "idle" | "running" | "done" | "error";
@@ -291,10 +308,7 @@ function streamLiveTranscode(
     "-hide_banner",
     "-loglevel",
     IS_DEV ? "warning" : "error",
-    "-protocol_whitelist",
-    "file,http,https,tcp,tls,crypto,data",
-    "-allowed_extensions",
-    "ALL",
+    ...getInputPermissiveHlsArgs(),
     "-i",
     inputUrl,
     "-map",
@@ -485,10 +499,7 @@ async function transcodeToFile(
     "-nostats",
     "-progress",
     "pipe:2",
-    "-protocol_whitelist",
-    "file,http,https,tcp,tls,crypto,data",
-    "-allowed_extensions",
-    "ALL",
+    ...getInputPermissiveHlsArgs(),
     "-i",
     inputUrl,
     "-map",
