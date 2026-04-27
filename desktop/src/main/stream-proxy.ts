@@ -32,13 +32,12 @@ function getInputPermissiveHlsArgs(): string[] {
   const args = [
     "-protocol_whitelist",
     "file,http,https,tcp,tls,crypto,data",
-    // Allow HLS segments fetched through our local proxy path (/stream), which has no extension.
-    "-extension_picky",
-    "0",
     "-allowed_extensions",
     "ALL",
   ];
   if (IS_WINDOWS) {
+    // Allow HLS segments fetched through our local proxy path (/stream), which has no extension.
+    args.push("-extension_picky", "0");
     args.push("-allowed_segment_extensions", "ALL");
   }
   return args;

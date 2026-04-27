@@ -22,10 +22,10 @@ import {
 } from "./stream-provider-channels";
 import { StreamProviderName, streamProviders } from "./stream-providers/stream-provider";
 
-const DEFAULT_STREAM_PROVIDER: StreamProviderName = "allanime";
+const DEFAULT_STREAM_PROVIDER: StreamProviderName = "animepahe";
 
 function normalizeProvider(value: unknown): StreamProviderName {
-  return value === "animepahe" ? "animepahe" : "allanime";
+  return value === "allanime" ? "allanime" : "animepahe";
 }
 
 function getActiveStreamProviderName(): StreamProviderName {

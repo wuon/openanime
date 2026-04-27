@@ -36,7 +36,7 @@ export function SettingsPage() {
   const [anilistPinToken, setAnilistPinToken] = useState("");
   const [anilistPinOpenBusy, setAnilistPinOpenBusy] = useState(false);
   const [anilistPinSubmitBusy, setAnilistPinSubmitBusy] = useState(false);
-  const [activeStreamProvider, setActiveStreamProvider] = useState<StreamProvider>("allanime");
+  const [activeStreamProvider, setActiveStreamProvider] = useState<StreamProvider>("animepahe");
   const [streamProviderLoading, setStreamProviderLoading] = useState(true);
   const [streamProviderBusy, setStreamProviderBusy] = useState(false);
 
@@ -316,8 +316,8 @@ export function SettingsPage() {
               <h4 className="text-sm font-medium">Pin fallback</h4>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 If custom URL sign-in does not work, set your AniList client&apos;s redirect URL to{" "}
-                <code className="font-mono text-[0.8rem]">https://anilist.co/api/v2/oauth/pin</code>,
-                open AniList below, then paste the access token shown on the pin page.
+                <code className="font-mono text-[0.8rem]">https://anilist.co/api/v2/oauth/pin</code>
+                , open AniList below, then paste the access token shown on the pin page.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
@@ -408,33 +408,31 @@ export function SettingsPage() {
         </Button>
       </section>
 
-      {isDevelopment && (
-        <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1 min-w-0">
-            <h2 className="text-sm font-medium">Streaming provider</h2>
-            <p className="text-sm text-muted-foreground">
-              Choose which upstream source is used for search, episodes, and playback.
-            </p>
-          </div>
-          <Select
-            value={activeStreamProvider}
-            onValueChange={(value) => {
-              if (value === "allanime" || value === "animepahe") {
-                void onStreamProviderChange(value);
-              }
-            }}
-            disabled={streamProviderLoading || streamProviderBusy}
-          >
-            <SelectTrigger className="sm:shrink-0 w-full sm:w-[220px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="allanime">AllAnime</SelectItem>
-              <SelectItem value="animepahe">AnimePahe</SelectItem>
-            </SelectContent>
-          </Select>
-        </section>
-      )}
+      <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1 min-w-0">
+          <h2 className="text-sm font-medium">Streaming provider</h2>
+          <p className="text-sm text-muted-foreground">
+            Choose which upstream source is used for search, episodes, and playback.
+          </p>
+        </div>
+        <Select
+          value={activeStreamProvider}
+          onValueChange={(value) => {
+            if (value === "allanime" || value === "animepahe") {
+              void onStreamProviderChange(value);
+            }
+          }}
+          disabled={streamProviderLoading || streamProviderBusy}
+        >
+          <SelectTrigger className="sm:shrink-0 w-full sm:w-[220px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="allanime">AllAnime</SelectItem>
+            <SelectItem value="animepahe">AnimePahe</SelectItem>
+          </SelectContent>
+        </Select>
+      </section>
 
       <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1 min-w-0">
