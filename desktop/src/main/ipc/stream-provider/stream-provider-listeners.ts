@@ -22,10 +22,10 @@ import {
 } from "./stream-provider-channels";
 import { StreamProviderName, streamProviders } from "./stream-providers/stream-provider";
 
-const DEFAULT_STREAM_PROVIDER: StreamProviderName = "animepahe";
+const DEFAULT_STREAM_PROVIDER: StreamProviderName = "allanime";
 
 function normalizeProvider(value: unknown): StreamProviderName {
-  return value === "allanime" ? "allanime" : "animepahe";
+  return value === "animepahe" ? "animepahe" : "allanime";
 }
 
 function getActiveStreamProviderName(): StreamProviderName {
@@ -49,12 +49,7 @@ export function addStreamProviderListeners() {
   });
   ipcMain.handle(
     STREAM_PROVIDER_EPISODES_CHANNEL,
-    (
-      _event,
-      providerId: string,
-      mode: "sub" | "dub",
-      providerOverride?: StreamProviderName
-    ) => {
+    (_event, providerId: string, mode: "sub" | "dub", providerOverride?: StreamProviderName) => {
       const providerName = providerOverride
         ? normalizeProvider(providerOverride)
         : getActiveStreamProviderName();

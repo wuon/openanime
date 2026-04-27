@@ -127,7 +127,7 @@ export function WatchPage() {
   /** Stream revision when load succeeded; upsert runs after show details finish loading. */
   const deferredHistoryUpsertRef = useRef<{ revision: number; ep: string } | null>(null);
   const activeLoadTokenRef = useRef(0);
-  const historyProviderRef = useRef<HistoryEntry["provider"]>("animepahe");
+  const historyProviderRef = useRef<HistoryEntry["provider"]>("allanime");
 
   const clearReconnectTimeout = useCallback(() => {
     if (reconnectTimeoutRef.current != null) {

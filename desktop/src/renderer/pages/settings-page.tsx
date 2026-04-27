@@ -36,7 +36,7 @@ export function SettingsPage() {
   const [anilistPinToken, setAnilistPinToken] = useState("");
   const [anilistPinOpenBusy, setAnilistPinOpenBusy] = useState(false);
   const [anilistPinSubmitBusy, setAnilistPinSubmitBusy] = useState(false);
-  const [activeStreamProvider, setActiveStreamProvider] = useState<StreamProvider>("animepahe");
+  const [activeStreamProvider, setActiveStreamProvider] = useState<StreamProvider>("allanime");
   const [streamProviderLoading, setStreamProviderLoading] = useState(true);
   const [streamProviderBusy, setStreamProviderBusy] = useState(false);
 

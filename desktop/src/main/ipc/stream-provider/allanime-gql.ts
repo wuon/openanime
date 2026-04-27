@@ -2,7 +2,7 @@ import { createDecipheriv, createHash } from "crypto";
 
 import { getElectronUserAgent } from "@/main/electron-user-agent";
 
-export const ALLANIME_REFERER = "https://allmanga.to";
+export const ALLANIME_REFERER = "https://youtu-chan.com";
 
 const ALLANIME_BASE = "allanime.day";
 export const ALLANIME_API = `https://api.${ALLANIME_BASE}`;
