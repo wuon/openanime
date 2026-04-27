@@ -11,6 +11,14 @@ interface AnimePaheRelease {
   session: string;
 }
 
+interface AnimePaheSource {
+  url: string;
+  fansub: string | null;
+  audio: string | null;
+  resolution: number | null;
+  originalIndex: number;
+}
+
 const BASE = process.env.ANIMEPAHE_BASE || "https://animepahe.pw";
 const PARTITION = "persist:openanime-animepahe";
 const IS_DEV = process.env.NODE_ENV !== "production";
@@ -198,8 +206,21 @@ export class AnimePaheStreamProvider implements StreamProvider {
       contextUrl: `${BASE}/anime/${providerId}`,
       referer: `${BASE}/anime/${providerId}`,
     });
-    const sources = this.extractKwikUrls(playHtml);
-    this.log("stream:sources", { count: sources.length, first: sources[0] ?? null });
+    const extractedSources = this.extractKwikSources(playHtml);
+    const sources = this.orderSourcesForMode(extractedSources, mode);
+    this.log("stream:sources", {
+      mode,
+      extracted: extractedSources.length,
+      ordered: sources.length,
+      first: sources[0]
+        ? {
+            url: sources[0].url,
+            audio: sources[0].audio,
+            resolution: sources[0].resolution,
+            fansub: sources[0].fansub,
+          }
+        : null,
+    });
     if (sources.length === 0) throw new Error("No AnimePahe sources found");
     const sourceKey = `${providerId}:${target.session}`;
     const startCursor = this.sourceCursorByEpisode.get(sourceKey) ?? 0;
@@ -209,13 +230,24 @@ export class AnimePaheStreamProvider implements StreamProvider {
     for (let offset = 0; offset < sources.length; offset += 1) {
       const index = (startIndex + offset) % sources.length;
       const source = sources[index];
-      this.log("stream:try-source", { sourceIndex: index, source });
+      this.log("stream:try-source", {
+        sourceIndex: index,
+        source: source.url,
+        audio: source.audio,
+        resolution: source.resolution,
+        fansub: source.fansub,
+      });
       try {
-        const m3u8 = await this.resolveKwik(source);
-        const unsupportedCodec = await this.isChromiumUnsupportedAudioCodec(m3u8, source);
+        const m3u8 = await this.resolveKwik(source.url);
+        const unsupportedCodec = await this.isChromiumUnsupportedAudioCodec(m3u8, source.url);
         if (unsupportedCodec) {
           errors.push(`source[${index}] unsupported audio codec mp4a.40.1`);
-          this.log("stream:skip-source-unsupported-codec", { sourceIndex: index, source });
+          this.log("stream:skip-source-unsupported-codec", {
+            sourceIndex: index,
+            source: source.url,
+            audio: source.audio,
+            resolution: source.resolution,
+          });
           continue;
         }
 
@@ -225,11 +257,11 @@ export class AnimePaheStreamProvider implements StreamProvider {
           sourceIndex: index,
           m3u8Preview: m3u8.slice(0, 96),
         });
-        return { url: m3u8, referer: source };
+        return { url: m3u8, referer: source.url };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         errors.push(`source[${index}] ${message}`);
-        this.log("stream:source-failed", { sourceIndex: index, source, error: message });
+        this.log("stream:source-failed", { sourceIndex: index, source: source.url, error: message });
       }
     }
 
@@ -335,24 +367,83 @@ export class AnimePaheStreamProvider implements StreamProvider {
     return releases;
   }
 
-  private extractKwikUrls(html: string): string[] {
-    const out = new Set<string>();
+  private extractKwikSources(html: string): AnimePaheSource[] {
+    const byUrl = new Map<string, AnimePaheSource>();
+    let usedFallback = false;
+    const mergeSource = (next: Omit<AnimePaheSource, "originalIndex">): void => {
+      const existing = byUrl.get(next.url);
+      if (existing) {
+        if (existing.fansub == null && next.fansub != null) existing.fansub = next.fansub;
+        if (existing.audio == null && next.audio != null) existing.audio = next.audio;
+        if (existing.resolution == null && next.resolution != null) existing.resolution = next.resolution;
+        return;
+      }
+      byUrl.set(next.url, { ...next, originalIndex: byUrl.size });
+    };
     const tags = html.match(/<[^>]+data-src=["'][^"']+["'][^>]*>/gi) ?? [];
     for (const tag of tags) {
-      const url = tag.match(/data-src\s*=\s*["']([^"']+)["']/i)?.[1]?.trim();
-      if (url && /^https?:\/\/kwik\./i.test(url)) out.add(url);
+      const url = this.readTagAttribute(tag, "data-src");
+      if (!url || !/^https?:\/\/kwik\./i.test(url)) continue;
+      mergeSource({
+        url,
+        fansub: this.readTagAttribute(tag, "data-fansub"),
+        audio: this.readTagAttribute(tag, "data-audio"),
+        resolution: asNumber(this.readTagAttribute(tag, "data-resolution")),
+      });
     }
-    if (out.size === 0) {
+    if (byUrl.size === 0) {
+      usedFallback = true;
       const fallback = html.match(/https?:\/\/kwik\.[a-z]+\/(?:e|f|d)\/[A-Za-z0-9_-]+/gi) ?? [];
-      for (const url of fallback) out.add(url);
+      for (const url of fallback) {
+        mergeSource({
+          url,
+          fansub: null,
+          audio: null,
+          resolution: null,
+        });
+      }
     }
-    const urls = [...out];
+    const sources = [...byUrl.values()];
     this.log("sources:extract", {
-      count: urls.length,
+      count: sources.length,
       usedTagParse: tags.length > 0,
-      usedFallback: tags.length === 0 || urls.length === 0,
+      usedFallback,
     });
-    return urls;
+    return sources;
+  }
+
+  private readTagAttribute(tag: string, attribute: string): string | null {
+    const escaped = attribute.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const value = tag.match(new RegExp(`${escaped}\\s*=\\s*["']([^"']+)["']`, "i"))?.[1];
+    return value?.trim() || null;
+  }
+
+  private orderSourcesForMode(sources: AnimePaheSource[], mode: StreamMode): AnimePaheSource[] {
+    const preferredAudio = mode === "sub" ? "jpn" : "eng";
+    const normalize = (value: string | null): string | null => value?.trim().toLowerCase() ?? null;
+    const byPreference = (source: AnimePaheSource): number =>
+      normalize(source.audio) === preferredAudio ? 0 : 1;
+    const byResolution = (source: AnimePaheSource): number => source.resolution ?? -1;
+
+    const ordered = [...sources].sort((a, b) => {
+      const preferenceDiff = byPreference(a) - byPreference(b);
+      if (preferenceDiff !== 0) return preferenceDiff;
+
+      const resolutionDiff = byResolution(b) - byResolution(a);
+      if (resolutionDiff !== 0) return resolutionDiff;
+
+      return a.originalIndex - b.originalIndex;
+    });
+
+    const preferredCount = ordered.filter((source) => byPreference(source) === 0).length;
+    this.log("sources:ordered", {
+      mode,
+      preferredAudio,
+      total: ordered.length,
+      preferredCount,
+      bestResolution: ordered[0]?.resolution ?? null,
+    });
+    return ordered;
   }
 
   private async resolveKwik(kwikUrl: string): Promise<string> {
