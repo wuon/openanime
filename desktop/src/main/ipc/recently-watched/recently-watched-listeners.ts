@@ -9,6 +9,7 @@ import {
   RECENTLY_WATCHED_READ_CHANNEL,
   RECENTLY_WATCHED_REMOVE_CHANNEL,
   RECENTLY_WATCHED_UPSERT_CHANNEL,
+  RECENTLY_WATCHED_UPSERT_SYNC_CHANNEL,
 } from "./recently-watched-channels";
 
 const FILENAME = "watch-history.json";
@@ -56,15 +57,44 @@ async function writeAllEntries(filePath: string, entries: HistoryEntry[]): Promi
   await fs.promises.writeFile(filePath, JSON.stringify(entries), "utf-8");
 }
 
+async function upsertEntryAsync(entry: HistoryEntry): Promise<void> {
+  const filePath = getFilePath();
+  const existing = await readAllEntries(filePath);
+  const next = existing.filter((e) => e.id !== entry.id);
+  next.push(entry);
+  await writeAllEntries(filePath, next);
+}
+
+function upsertEntrySync(entry: HistoryEntry): void {
+  const filePath = getFilePath();
+  let existing: HistoryEntry[] = [];
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      existing = parsed.filter(isValidHistoryEntry);
+    }
+  } catch {
+    existing = [];
+  }
+  const next = existing.filter((e) => e.id !== entry.id);
+  next.push(entry);
+  fs.writeFileSync(filePath, JSON.stringify(next), "utf-8");
+}
+
 export function addRecentlyWatchedListeners() {
   ipcMain.handle(RECENTLY_WATCHED_UPSERT_CHANNEL, async (_event, entry: unknown): Promise<void> => {
     if (!isValidHistoryEntry(entry)) return;
-    const filePath = getFilePath();
     try {
-      const existing = await readAllEntries(filePath);
-      const next = existing.filter((e) => e.id !== entry.id);
-      next.push(entry);
-      await writeAllEntries(filePath, next);
+      await upsertEntryAsync(entry);
+    } catch {
+      // Ignore write errors (e.g. disk full)
+    }
+  });
+  ipcMain.on(RECENTLY_WATCHED_UPSERT_SYNC_CHANNEL, (_event, entry: unknown): void => {
+    if (!isValidHistoryEntry(entry)) return;
+    try {
+      upsertEntrySync(entry);
     } catch {
       // Ignore write errors (e.g. disk full)
     }

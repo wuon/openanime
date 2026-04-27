@@ -10,6 +10,7 @@ import { type RichShowDetails, useShowDetails } from "../hooks/use-show-details"
 
 /** How many automatic reconnects after a playback error before showing the manual overlay. */
 const MAX_AUTO_RECONNECT = 5;
+const PERIODIC_HISTORY_SYNC_MS = 10_000;
 
 const IS_DEV = process.env.NODE_ENV !== "production";
 const ENABLE_HLS_SERVER_TRANSCODE = true;
@@ -121,6 +122,8 @@ export function WatchPage() {
   const lastPlaybackTimeRef = useRef<number | null>(null);
   const autoReconnectAttemptRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historySyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const historySyncInFlightRef = useRef(false);
   /** Stream revision when load succeeded; upsert runs after show details finish loading. */
   const deferredHistoryUpsertRef = useRef<{ revision: number; ep: string } | null>(null);
   const activeLoadTokenRef = useRef(0);
@@ -133,7 +136,7 @@ export function WatchPage() {
     }
   }, []);
 
-  const syncHistoryProgress = useCallback(async () => {
+  const syncHistoryProgress = useCallback(async (opts?: { sync?: boolean }) => {
     if (deferredHistoryUpsertRef.current != null) return;
     const base = lastHistoryEntryRef.current;
     const video = videoRef.current;
@@ -151,11 +154,39 @@ export function WatchPage() {
     };
     lastHistoryEntryRef.current = next;
     try {
+      if (opts?.sync) {
+        window.recentlyWatched.upsertSync(next);
+        return;
+      }
       await window.recentlyWatched.upsert(next);
     } catch {
       // best-effort
     }
   }, []);
+
+  const stopPeriodicHistorySync = useCallback(() => {
+    if (historySyncIntervalRef.current != null) {
+      clearInterval(historySyncIntervalRef.current);
+      historySyncIntervalRef.current = null;
+    }
+  }, []);
+
+  const triggerPeriodicHistorySync = useCallback(async () => {
+    if (historySyncInFlightRef.current) return;
+    historySyncInFlightRef.current = true;
+    try {
+      await syncHistoryProgress();
+    } finally {
+      historySyncInFlightRef.current = false;
+    }
+  }, [syncHistoryProgress]);
+
+  const startPeriodicHistorySync = useCallback(() => {
+    stopPeriodicHistorySync();
+    historySyncIntervalRef.current = setInterval(() => {
+      void triggerPeriodicHistorySync();
+    }, PERIODIC_HISTORY_SYNC_MS);
+  }, [stopPeriodicHistorySync, triggerPeriodicHistorySync]);
 
   const applyResumeIfNeeded = useCallback((video: HTMLVideoElement) => {
     const resume = resumeAfterLoadRef.current;
@@ -171,7 +202,18 @@ export function WatchPage() {
 
   const handleVideoPlaying = useCallback(() => {
     autoReconnectAttemptRef.current = 0;
-  }, []);
+    startPeriodicHistorySync();
+  }, [startPeriodicHistorySync]);
+
+  const handleVideoPause = useCallback(() => {
+    stopPeriodicHistorySync();
+    void syncHistoryProgress();
+  }, [stopPeriodicHistorySync, syncHistoryProgress]);
+
+  const handleVideoEnded = useCallback(() => {
+    stopPeriodicHistorySync();
+    void syncHistoryProgress();
+  }, [stopPeriodicHistorySync, syncHistoryProgress]);
 
   const loadStream = useCallback(
     async (ep: string, opts?: { resumeFrom?: number | null }) => {
@@ -182,6 +224,7 @@ export function WatchPage() {
       setPlayUrl("");
       lastHistoryEntryRef.current = null;
       clearReconnectTimeout();
+      stopPeriodicHistorySync();
       if (opts?.resumeFrom != null && opts.resumeFrom > 0) {
         resumeAfterLoadRef.current = opts.resumeFrom;
       } else {
@@ -275,7 +318,7 @@ export function WatchPage() {
         }
       }
     },
-    [episode, clearReconnectTimeout, streamProviderOverride]
+    [episode, clearReconnectTimeout, stopPeriodicHistorySync, streamProviderOverride]
   );
 
   useEffect(() => {
@@ -328,15 +371,19 @@ export function WatchPage() {
   useEffect(() => {
     return () => {
       clearReconnectTimeout();
+      stopPeriodicHistorySync();
     };
-  }, [clearReconnectTimeout]);
+  }, [clearReconnectTimeout, stopPeriodicHistorySync]);
 
   const onEpisodeSelect = useCallback(
     (ep: string) => {
       setCurrentEpisode(Number(ep));
-      void loadStream(ep);
+      void (async () => {
+        await syncHistoryProgress();
+        await loadStream(ep);
+      })();
     },
-    [loadStream]
+    [loadStream, syncHistoryProgress]
   );
 
   const retryStream = useCallback(() => {
@@ -354,6 +401,7 @@ export function WatchPage() {
   }, [clearReconnectTimeout, currentEpisode, loadStream]);
 
   const handleVideoError = useCallback(() => {
+    stopPeriodicHistorySync();
     const el = videoRef.current;
     const mediaError = el?.error;
     logPlaybackFailure("video-element-error", {
@@ -394,11 +442,30 @@ export function WatchPage() {
     setPlaybackError(
       "Stream interrupted (e.g. network lost or server error). Reconnect automatically failed; try again or check your connection."
     );
-  }, [clearReconnectTimeout, currentEpisode, loadStream]);
+  }, [clearReconnectTimeout, currentEpisode, loadStream, stopPeriodicHistorySync]);
 
   useEffect(() => {
     return () => {
-      void syncHistoryProgress();
+      void syncHistoryProgress({ sync: true });
+    };
+  }, [syncHistoryProgress]);
+
+  useEffect(() => {
+    const flushSync = () => {
+      void syncHistoryProgress({ sync: true });
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        flushSync();
+      }
+    };
+    window.addEventListener("beforeunload", flushSync);
+    window.addEventListener("pagehide", flushSync);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("beforeunload", flushSync);
+      window.removeEventListener("pagehide", flushSync);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [syncHistoryProgress]);
 
@@ -447,12 +514,8 @@ export function WatchPage() {
         applyResumeIfNeeded(e.currentTarget);
         void syncHistoryProgress();
       }}
-      onPause={() => {
-        void syncHistoryProgress();
-      }}
-      onEnded={() => {
-        void syncHistoryProgress();
-      }}
+      onPause={handleVideoPause}
+      onEnded={handleVideoEnded}
       onPlaying={handleVideoPlaying}
       onError={handleVideoError}
     />

@@ -38,5 +38,6 @@ export function unregisterListeners() {
 
   allListeners.forEach((channel: string) => {
     ipcMain.removeHandler(channel);
+    ipcMain.removeAllListeners(channel);
   });
 }

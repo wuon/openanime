@@ -7,12 +7,16 @@ import {
   RECENTLY_WATCHED_READ_CHANNEL,
   RECENTLY_WATCHED_REMOVE_CHANNEL,
   RECENTLY_WATCHED_UPSERT_CHANNEL,
+  RECENTLY_WATCHED_UPSERT_SYNC_CHANNEL,
 } from "./recently-watched-channels";
 
 export function exposeRecentlyWatchedContext() {
   contextBridge.exposeInMainWorld("recentlyWatched", {
     upsert: (entry: HistoryEntry) =>
       ipcRenderer.invoke(RECENTLY_WATCHED_UPSERT_CHANNEL, entry) as Promise<void>,
+    upsertSync: (entry: HistoryEntry) => {
+      ipcRenderer.sendSync(RECENTLY_WATCHED_UPSERT_SYNC_CHANNEL, entry);
+    },
     read: () =>
       ipcRenderer.invoke(RECENTLY_WATCHED_READ_CHANNEL) as Promise<HistoryEntry[]>,
     clear: () =>
