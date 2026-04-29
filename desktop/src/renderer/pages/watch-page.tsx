@@ -451,20 +451,23 @@ export function WatchPage() {
   }, [syncHistoryProgress]);
 
   useEffect(() => {
-    const flushSync = () => {
+    const flushSyncOnExit = () => {
       void syncHistoryProgress({ sync: true });
+    };
+    const flushAsyncOnHidden = () => {
+      void syncHistoryProgress();
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
-        flushSync();
+        flushAsyncOnHidden();
       }
     };
-    window.addEventListener("beforeunload", flushSync);
-    window.addEventListener("pagehide", flushSync);
+    window.addEventListener("beforeunload", flushSyncOnExit);
+    window.addEventListener("pagehide", flushSyncOnExit);
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      window.removeEventListener("beforeunload", flushSync);
-      window.removeEventListener("pagehide", flushSync);
+      window.removeEventListener("beforeunload", flushSyncOnExit);
+      window.removeEventListener("pagehide", flushSyncOnExit);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [syncHistoryProgress]);

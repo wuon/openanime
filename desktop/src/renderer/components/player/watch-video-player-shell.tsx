@@ -136,6 +136,34 @@ export function WatchVideoPlayerShell({
     };
   }, [playUrl, playbackError, streamRevision]);
 
+  useEffect(() => {
+    if (!playUrl) return;
+
+    const syncVideoLayout = () => {
+      const videoElement = videoRef.current;
+      if (!videoElement) return;
+      videoElement.style.width = "100%";
+      videoElement.style.height = "100%";
+      videoElement.style.objectFit = "contain";
+    };
+
+    const scheduleSyncVideoLayout = () => {
+      requestAnimationFrame(() => {
+        syncVideoLayout();
+        requestAnimationFrame(syncVideoLayout);
+      });
+    };
+
+    scheduleSyncVideoLayout();
+    window.addEventListener("resize", scheduleSyncVideoLayout);
+    document.addEventListener("fullscreenchange", scheduleSyncVideoLayout);
+
+    return () => {
+      window.removeEventListener("resize", scheduleSyncVideoLayout);
+      document.removeEventListener("fullscreenchange", scheduleSyncVideoLayout);
+    };
+  }, [playUrl, streamRevision, videoRef]);
+
   const isPlayerUiActive =
     !playUrl || Boolean(playbackError) || arePlayerControlsVisible || isTopChromeHovered || isEpisodeSelectOpen;
 
