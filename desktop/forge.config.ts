@@ -25,9 +25,6 @@ const config: ForgeConfig = {
     /**
      * Ship external helper binaries/scripts alongside the app so the main
      * process can execute them even when running from a packaged build.
-     *
-     * - Windows: ani-cli + fzf.exe (+ ffmpeg if present)
-     * - Other platforms: ani-cli + fzf (+ ffmpeg if present)
      */
     extraResource: isWindows ? ["bin/ffmpeg.exe"] : ["bin/ffmpeg"],
   },
