@@ -11,18 +11,34 @@ import { StreamMode, StreamProvider, StreamUrlResult } from "./stream-provider";
 const ALLANIME_BASE = "allanime.day";
 const IS_DEV = process.env.NODE_ENV !== "production";
 
+const MP4UPLOAD_REFERER = "https://www.mp4upload.com/";
+const PROVIDER_FETCH_TIMEOUT_MS = 25_000;
+
 const EPISODE_EMBED_GQL = `query ($showId: String!, $translationType: VaildTranslationTypeEnumType!, $episodeString: String!) { episode( showId: $showId translationType: $translationType episodeString: $episodeString ) { episodeString sourceUrls } }`;
+
+// Persisted-query SHA-256 hash for the episode embed query. ani-cli ships this same hash
+// and prefers the GET path because the POST path can return `episode: null` with an
+// internal "slugTime" error from the API.
+const EPISODE_EMBED_PERSISTED_HASH =
+  "d405d0edd690624b66baba3068e0edc3ac90f1597d898a1ec8db4e5c43c00fec";
+// Persisted-query SHA-256 hash for the `shows` query (search + recent uploads).
+// AllAnime's POST path for this query now returns 200 with empty edges; the persisted
+// GET that the web UI uses still returns real results.
+const SHOWS_PERSISTED_HASH = "a24c500a1b765c68ae1d8dd85174931f661c71369c89b92b88b75a725afc471c";
+
 const RECENT_UPLOADS_GQL = `
   query (
     $search: SearchInput
     $limit: Int
     $page: Int
+    $translationType: VaildTranslationTypeEnumType
     $countryOrigin: VaildCountryOriginEnumType
   ) {
     shows(
       search: $search
       limit: $limit
       page: $page
+      translationType: $translationType
       countryOrigin: $countryOrigin
     ) {
       edges {
@@ -42,11 +58,15 @@ const SEARCH_GQL = `
   query (
     $search: SearchInput
     $limit: Int
+    $page: Int
+    $translationType: VaildTranslationTypeEnumType
     $countryOrigin: VaildCountryOriginEnumType
   ) {
     shows(
       search: $search
       limit: $limit
+      page: $page
+      translationType: $translationType
       countryOrigin: $countryOrigin
     ) {
       edges {
@@ -213,14 +233,39 @@ interface ProviderPayloadExtract {
   m3u8Referer: string;
 }
 
-const SUPPORTED_SOURCE_NAMES = new Set(["Default", "Yt-mp4", "S-mp4"]);
+const SUPPORTED_SOURCE_NAMES = new Set(["Default", "Yt-mp4", "S-mp4", "Mp4"]);
 
 function toAbsoluteAllAnimeUrl(pathOrUrl: string): string {
   return pathOrUrl.startsWith("http") ? pathOrUrl : `https://${ALLANIME_BASE}${pathOrUrl}`;
 }
 
 function refererForDirectUrl(url: string): string {
-  return url.includes("tools.fast4speed.rsvp") ? ALLANIME_REFERER : "";
+  if (url.includes("mp4upload.com")) return MP4UPLOAD_REFERER;
+  // ani-cli unsets the referer for sharepoint playback URLs.
+  if (url.includes("sharepoint.com")) return "";
+  // ani-cli defaults the playback referer to the allanime referer for everything else
+  // (wixmp direct mp4 extracts, fast4speed Yt-mp4, and expanded m3u8 variants).
+  return ALLANIME_REFERER;
+}
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs: number = PROVIDER_FETCH_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function extractMp4UploadLink(html: string): string | null {
+  const match = html.match(/(?:src|file)\s*:\s*"([^"]+\.mp4[^"]*)"/);
+  if (!match) return null;
+  return match[1].replace(/\\u0026/g, "&").replace(/\\/g, "");
 }
 
 function isSupportedObfuscatedSource(source: SourceUrl): boolean {
@@ -315,7 +360,7 @@ async function expandMasterM3u8(
   masterUrl: string,
   referer: string
 ): Promise<{ url: string; quality: number } | null> {
-  const res = await fetch(masterUrl, {
+  const res = await fetchWithTimeout(masterUrl, {
     method: "GET",
     headers: {
       Referer: referer,
@@ -397,12 +442,18 @@ async function buildCandidateFromProviderPayload(
   if (!candidate.url) return null;
 
   if (candidate.url.includes("master.m3u8")) {
-    if (!m3u8Referer) return null;
+    // Fetch the master playlist with the payload Referer (ani-cli's `m3u8_refr`),
+    // falling back to the allanime referer when the payload doesn't carry one.
+    const fetchReferer = m3u8Referer || ALLANIME_REFERER;
     const m3u8StartedAt = Date.now();
-    const bestVariant = await expandMasterM3u8(candidate.url, m3u8Referer);
+    const bestVariant = await expandMasterM3u8(candidate.url, fetchReferer);
     logStep("m3u8 variant expansion", m3u8StartedAt, bestVariant ? "ok" : "no-variant");
     if (!bestVariant) return null;
-    return { url: bestVariant.url, quality: bestVariant.quality, referer: m3u8Referer };
+    return {
+      url: bestVariant.url,
+      quality: bestVariant.quality,
+      referer: refererForDirectUrl(bestVariant.url),
+    };
   }
 
   return {
@@ -429,8 +480,29 @@ async function resolveSourceToCandidates(
     return [{ url: providerUrl, quality: 0, referer }];
   }
 
+  // Provider behavior: Mp4 (mp4upload) decoded path is an HTML embed; scrape the .mp4 link.
+  if (sourceName === "Mp4") {
+    const mp4StartedAt = Date.now();
+    const mp4Res = await fetchWithTimeout(providerUrl, {
+      method: "GET",
+      headers: {
+        Referer: ALLANIME_REFERER,
+        "User-Agent": getElectronUserAgent(),
+      },
+    });
+    if (!mp4Res.ok) {
+      logStep("mp4upload fetch failed", mp4StartedAt, `status=${mp4Res.status}`);
+      return [];
+    }
+    const html = await mp4Res.text();
+    const mp4Link = extractMp4UploadLink(html);
+    logStep("mp4upload extract", mp4StartedAt, mp4Link ? "ok" : "no-link");
+    if (!mp4Link) return [];
+    return [{ url: mp4Link, quality: 0, referer: MP4UPLOAD_REFERER }];
+  }
+
   const providerFetchStartedAt = Date.now();
-  const providerRes = await fetch(providerUrl, {
+  const providerRes = await fetchWithTimeout(providerUrl, {
     method: "GET",
     headers: {
       Referer: ALLANIME_REFERER,
@@ -487,7 +559,11 @@ export class AllAnimeStreamProvider implements StreamProvider {
       translationType: mode,
       episodeString: episode,
     };
-    const json = await allAnimeGql<EpisodeResponse>(variables, EPISODE_EMBED_GQL);
+    const json = await allAnimeGql<EpisodeResponse>(
+      variables,
+      EPISODE_EMBED_GQL,
+      EPISODE_EMBED_PERSISTED_HASH
+    );
     logStep("episode gql fetch", episodeQueryStartedAt);
 
     const sourceFilterStartedAt = Date.now();
@@ -536,14 +612,18 @@ export class AllAnimeStreamProvider implements StreamProvider {
 
   async getRecentUploads(page: number, limit = 12, mode: StreamMode = "sub"): Promise<Episode[]> {
     const variables = {
-      search: {},
+      search: { allowAdult: false, allowUnknown: false },
       limit,
       page: Math.max(1, page),
       translationType: mode,
       countryOrigin: "ALL",
     };
 
-    const json = await allAnimeGql<GqlSearchResponse>(variables, RECENT_UPLOADS_GQL);
+    const json = await allAnimeGql<GqlSearchResponse>(
+      variables,
+      RECENT_UPLOADS_GQL,
+      SHOWS_PERSISTED_HASH
+    );
     const edges = json.data?.shows?.edges ?? [];
 
     const episodes = edges.map((edge) => {
@@ -564,17 +644,24 @@ export class AllAnimeStreamProvider implements StreamProvider {
     return episodes;
   }
 
-  async search(query: string): Promise<ShowSearchResult[]> {
+  async search(query: string, mode: StreamMode = "sub"): Promise<ShowSearchResult[]> {
     const variables = {
       search: {
+        allowAdult: false,
+        allowUnknown: false,
         query,
       },
       limit: 36,
       page: 1,
+      translationType: mode,
       countryOrigin: "ALL",
     };
 
-    const json = await allAnimeGql<GqlSearchResponse>(variables, SEARCH_GQL);
+    const json = await allAnimeGql<GqlSearchResponse>(
+      variables,
+      SEARCH_GQL,
+      SHOWS_PERSISTED_HASH
+    );
     const edges = json.data?.shows?.edges ?? [];
 
     const shows = edges.map((edge) => {

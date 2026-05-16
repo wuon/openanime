@@ -98,7 +98,74 @@ function normalizeTobeparsed(value: unknown): unknown {
   return normalized;
 }
 
-export async function allAnimeGql<T>(variables: unknown, query: string): Promise<T> {
+function isAcceptableGetResponse(parsed: unknown): boolean {
+  if (!parsed || typeof parsed !== "object") return false;
+  const record = parsed as { data?: unknown; errors?: unknown };
+
+  if (Array.isArray(record.errors) && record.errors.length > 0) return false;
+  if (record.data == null) return false;
+  return true;
+}
+
+async function tryPersistedQueryGet(
+  variables: unknown,
+  persistedQueryHash: string
+): Promise<unknown | null> {
+  const extensions = {
+    persistedQuery: { version: 1, sha256Hash: persistedQueryHash },
+  };
+  const url = new URL(`${ALLANIME_API}/api`);
+  url.searchParams.set("variables", JSON.stringify(variables));
+  url.searchParams.set("extensions", JSON.stringify(extensions));
+
+  try {
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Referer: ALLANIME_REFERER,
+        Origin: ALLANIME_REFERER,
+        "User-Agent": getElectronUserAgent(),
+      },
+    });
+
+    if (!res.ok) return null;
+
+    const text = await res.text();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return null;
+    }
+    // Accept any well-formed GraphQL response that carries `data` and no `errors`.
+    // This covers both the encrypted episode sourceUrls (tobeparsed) payload and the
+    // plain `shows` payload used by search / recent uploads.
+    if (!isAcceptableGetResponse(parsed)) return null;
+    return parsed;
+  } catch (error: unknown) {
+    if (IS_DEV) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      console.warn(`[allanime-gql] persisted query GET failed, falling back to POST: ${message}`);
+    }
+    return null;
+  }
+}
+
+export async function allAnimeGql<T>(
+  variables: unknown,
+  query: string,
+  persistedQueryHash?: string
+): Promise<T> {
+  if (persistedQueryHash) {
+    const getResult = await tryPersistedQueryGet(variables, persistedQueryHash);
+    if (getResult) {
+      return normalizeTobeparsed(getResult) as T;
+    }
+  }
+
+  // POST path intentionally omits the Origin header. ani-cli only sets Origin on the
+  // persisted-query GET, and AllAnime's gateway rejects POST bodies for `shows` queries
+  // (search / recent uploads) when an Origin that doesn't match an allowed origin is sent.
   const res = await fetch(`${ALLANIME_API}/api`, {
     method: "POST",
     headers: {
