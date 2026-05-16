@@ -1,9 +1,29 @@
 import { BrowserWindow, app } from "electron";
+// @ts-expect-error no types
+import started from "electron-squirrel-startup";
 import path from "path";
+import { type IUpdateElectronAppOptions, updateElectronApp } from "update-electron-app";
 
 import { APP_PROTOCOL, completeAniListOAuthFromDeepLink } from "@/main/ipc/anilist/anilist-oauth";
 import { registerListeners, unregisterListeners } from "@/main/ipc/listeners";
 import { startStreamProxy } from "@/main/stream-proxy";
+
+if (started) {
+  app.quit();
+}
+
+const runUpdateElectronApp = updateElectronApp as (opts?: IUpdateElectronAppOptions) => void;
+
+const checkForUpdates = () => {
+  if (process.platform === "darwin") return;
+
+  runUpdateElectronApp({
+    updateSource: {
+      type: 0, // UpdateSourceType.ElectronPublicUpdateService
+      repo: "wuon/openanime",
+    },
+  });
+};
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
@@ -64,6 +84,7 @@ app.on("ready", () => {
   registerListeners();
   void startStreamProxy().then(() => {
     createWindow();
+    checkForUpdates();
     const initialDeepLink = findDeepLinkArg(process.argv);
     if (initialDeepLink) {
       completeAniListOAuthFromDeepLink(initialDeepLink);
