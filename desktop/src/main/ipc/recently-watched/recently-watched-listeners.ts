@@ -30,7 +30,8 @@ function isValidHistoryEntry(x: unknown): x is HistoryEntry {
   const ep = e.episode;
   if (!ep || typeof ep !== "object") return false;
   const epObj = ep as Record<string, unknown>;
-  if (typeof epObj.id !== "string" || typeof epObj.providerId !== "string") return false;
+  if (epObj.id != null && typeof epObj.id !== "string") return false;
+  if (typeof epObj.providerId !== "string") return false;
   if (typeof epObj.index !== "number" || !Number.isFinite(epObj.index)) return false;
   if (epObj.mode !== "sub" && epObj.mode !== "dub") return false;
   if (epObj.thumbnail !== null && typeof epObj.thumbnail !== "string") return false;
@@ -91,13 +92,17 @@ export function addRecentlyWatchedListeners() {
       // Ignore write errors (e.g. disk full)
     }
   });
-  ipcMain.on(RECENTLY_WATCHED_UPSERT_SYNC_CHANNEL, (_event, entry: unknown): void => {
-    if (!isValidHistoryEntry(entry)) return;
+  ipcMain.on(RECENTLY_WATCHED_UPSERT_SYNC_CHANNEL, (event, entry: unknown): void => {
+    if (!isValidHistoryEntry(entry)) {
+      event.returnValue = undefined;
+      return;
+    }
     try {
       upsertEntrySync(entry);
     } catch {
       // Ignore write errors (e.g. disk full)
     }
+    event.returnValue = undefined;
   });
 
   ipcMain.handle(RECENTLY_WATCHED_READ_CHANNEL, async (): Promise<HistoryEntry[]> => {

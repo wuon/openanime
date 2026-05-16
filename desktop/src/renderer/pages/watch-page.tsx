@@ -40,7 +40,7 @@ function buildWatchHistoryEntry(
     rich?.thumbnail ?? showDetails?.coverImage ?? showDetails?.bannerImage ?? episode.thumbnail;
 
   return {
-    id: `${provider}:${episode.id}-${ep}`,
+    id: `${provider}:${episode.id || episode.providerId}-${ep}`,
     provider,
     episode: {
       ...episode,
@@ -122,7 +122,6 @@ export function WatchPage() {
   const lastPlaybackTimeRef = useRef<number | null>(null);
   const autoReconnectAttemptRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const historySyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const historySyncInFlightRef = useRef(false);
   /** Stream revision when load succeeded; upsert runs after show details finish loading. */
   const deferredHistoryUpsertRef = useRef<{ revision: number; ep: string } | null>(null);
@@ -137,7 +136,6 @@ export function WatchPage() {
   }, []);
 
   const syncHistoryProgress = useCallback(async (opts?: { sync?: boolean }) => {
-    if (deferredHistoryUpsertRef.current != null) return;
     const base = lastHistoryEntryRef.current;
     const video = videoRef.current;
     if (!base || !video) return;
@@ -164,30 +162,6 @@ export function WatchPage() {
     }
   }, []);
 
-  const stopPeriodicHistorySync = useCallback(() => {
-    if (historySyncIntervalRef.current != null) {
-      clearInterval(historySyncIntervalRef.current);
-      historySyncIntervalRef.current = null;
-    }
-  }, []);
-
-  const triggerPeriodicHistorySync = useCallback(async () => {
-    if (historySyncInFlightRef.current) return;
-    historySyncInFlightRef.current = true;
-    try {
-      await syncHistoryProgress();
-    } finally {
-      historySyncInFlightRef.current = false;
-    }
-  }, [syncHistoryProgress]);
-
-  const startPeriodicHistorySync = useCallback(() => {
-    stopPeriodicHistorySync();
-    historySyncIntervalRef.current = setInterval(() => {
-      void triggerPeriodicHistorySync();
-    }, PERIODIC_HISTORY_SYNC_MS);
-  }, [stopPeriodicHistorySync, triggerPeriodicHistorySync]);
-
   const applyResumeIfNeeded = useCallback((video: HTMLVideoElement) => {
     const resume = resumeAfterLoadRef.current;
     if (resume == null || resume <= 0 || Number.isNaN(resume)) return;
@@ -202,18 +176,15 @@ export function WatchPage() {
 
   const handleVideoPlaying = useCallback(() => {
     autoReconnectAttemptRef.current = 0;
-    startPeriodicHistorySync();
-  }, [startPeriodicHistorySync]);
+  }, []);
 
   const handleVideoPause = useCallback(() => {
-    stopPeriodicHistorySync();
     void syncHistoryProgress();
-  }, [stopPeriodicHistorySync, syncHistoryProgress]);
+  }, [syncHistoryProgress]);
 
   const handleVideoEnded = useCallback(() => {
-    stopPeriodicHistorySync();
     void syncHistoryProgress();
-  }, [stopPeriodicHistorySync, syncHistoryProgress]);
+  }, [syncHistoryProgress]);
 
   const loadStream = useCallback(
     async (ep: string, opts?: { resumeFrom?: number | null }) => {
@@ -224,7 +195,6 @@ export function WatchPage() {
       setPlayUrl("");
       lastHistoryEntryRef.current = null;
       clearReconnectTimeout();
-      stopPeriodicHistorySync();
       if (opts?.resumeFrom != null && opts.resumeFrom > 0) {
         resumeAfterLoadRef.current = opts.resumeFrom;
       } else {
@@ -318,7 +288,7 @@ export function WatchPage() {
         }
       }
     },
-    [episode, clearReconnectTimeout, stopPeriodicHistorySync, streamProviderOverride]
+    [episode, clearReconnectTimeout, streamProviderOverride]
   );
 
   useEffect(() => {
@@ -371,9 +341,23 @@ export function WatchPage() {
   useEffect(() => {
     return () => {
       clearReconnectTimeout();
-      stopPeriodicHistorySync();
     };
-  }, [clearReconnectTimeout, stopPeriodicHistorySync]);
+  }, [clearReconnectTimeout]);
+
+  // Periodic history sync: runs as long as a stream is loaded.
+  // Completely independent of the playing/pause event chain so it's resilient to
+  // HMR stale closures and missing onPlaying events.
+  useEffect(() => {
+    if (!playUrl) return;
+    const id = setInterval(() => {
+      if (historySyncInFlightRef.current) return;
+      historySyncInFlightRef.current = true;
+      void syncHistoryProgress().finally(() => {
+        historySyncInFlightRef.current = false;
+      });
+    }, PERIODIC_HISTORY_SYNC_MS);
+    return () => clearInterval(id);
+  }, [playUrl, syncHistoryProgress]);
 
   const onEpisodeSelect = useCallback(
     (ep: string) => {
@@ -401,7 +385,6 @@ export function WatchPage() {
   }, [clearReconnectTimeout, currentEpisode, loadStream]);
 
   const handleVideoError = useCallback(() => {
-    stopPeriodicHistorySync();
     const el = videoRef.current;
     const mediaError = el?.error;
     logPlaybackFailure("video-element-error", {
@@ -442,7 +425,7 @@ export function WatchPage() {
     setPlaybackError(
       "Stream interrupted (e.g. network lost or server error). Reconnect automatically failed; try again or check your connection."
     );
-  }, [clearReconnectTimeout, currentEpisode, loadStream, stopPeriodicHistorySync]);
+  }, [clearReconnectTimeout, currentEpisode, loadStream]);
 
   useEffect(() => {
     return () => {

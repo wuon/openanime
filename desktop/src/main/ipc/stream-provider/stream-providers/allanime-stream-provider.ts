@@ -628,7 +628,7 @@ export class AllAnimeStreamProvider implements StreamProvider {
 
     const episodes = edges.map((edge) => {
       return {
-        id: edge.aniListId,
+        id: edge.aniListId ?? edge._id,
         providerId: edge._id,
         title: {
           english: edge.englishName,
@@ -666,7 +666,7 @@ export class AllAnimeStreamProvider implements StreamProvider {
 
     const shows = edges.map((edge) => {
       return {
-        id: edge.aniListId,
+        id: edge.aniListId ?? edge._id,
         providerId: edge._id,
         title: {
           english: edge.englishName,

@@ -12,8 +12,9 @@ export function useWelcomeRecentlyWatched() {
     const seen = new Set<string>();
     for (let i = historyEntries.length - 1; i >= 0 && out.length < DISPLAY_UNIQUE_SHOW_LIMIT; i--) {
       const e = historyEntries[i];
-      if (seen.has(e.episode.id)) continue;
-      seen.add(e.episode.id);
+      const showKey = e.episode.id || e.episode.providerId;
+      if (seen.has(showKey)) continue;
+      seen.add(showKey);
       out.push(e);
     }
     return out;

@@ -79,7 +79,7 @@ export function WelcomePage() {
           ) : recentUploads.length > 0 ? (
             <HorizontalCarousel
               items={recentUploads.map((episode) => ({
-                id: `${episode.id}-${episode.index}-${episode.mode}`,
+                id: `${episode.id || episode.providerId}-${episode.index}-${episode.mode}`,
                 coverUrl: episode.thumbnail,
                 title:
                   episode.title.english ??

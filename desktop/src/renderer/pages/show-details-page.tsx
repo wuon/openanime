@@ -148,8 +148,8 @@ export function ShowDetailsPage() {
       navigate("/watch", {
         state: {
           episode: {
-            id: details?.id,
-            providerId: details?.providerId,
+            id: details?.id || id,
+            providerId: details?.providerId || anime?.providerId,
             title: {
               english: details?.title.english,
               romanji: details?.title.romaji,
@@ -172,6 +172,8 @@ export function ShowDetailsPage() {
       details?.title.native,
       details?.coverImage,
       activeMode,
+      id,
+      anime?.providerId,
     ]
   );
 

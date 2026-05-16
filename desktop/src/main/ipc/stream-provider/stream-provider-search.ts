@@ -96,7 +96,7 @@ export async function getShowDetails(
     throw new Error("Show not found");
   }
   return {
-    id: show.aniListId ?? "",
+    id: show.aniListId ?? show._id,
     providerId: show._id,
     name: (show.name ?? "").replace(/\\"/g, '"'),
     thumbnail: show.thumbnail ?? null,
