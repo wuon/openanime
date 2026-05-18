@@ -29,6 +29,15 @@ const allScreenshots: Screenshot[] = [
     alt: "Openanime home screen with featured anime and continue watching",
   },
   {
+    id: "episodes",
+    label: "Episodes",
+    title: "Browse every episode at a glance",
+    description:
+      "Scroll through a show’s full episode list with thumbnails and titles—pick the one you want without leaving the app.",
+    src: "/previews/episode-list.png",
+    alt: "Openanime episode list with thumbnail grid for an anime series",
+  },
+  {
     id: "player",
     label: "Player",
     title: "Watch in a focused player",
@@ -135,7 +144,7 @@ export function ScreenshotsSection() {
         <div
           className="grid w-full gap-2 sm:gap-3"
           style={{
-            gridTemplateColumns: `repeat(6, minmax(0, 1fr))`,
+            gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`,
           }}
           role="tablist"
           aria-label="App screenshots"
@@ -172,7 +181,7 @@ export function ScreenshotsSection() {
                 </div>
                 <span
                   className={cn(
-                    "block truncate font-mono text-[10px] tracking-wide uppercase transition-colors sm:text-xs",
+                    "block truncate text-[10px] tracking-wide transition-colors sm:text-xs",
                     isActive
                       ? "text-white"
                       : "text-white/45 group-hover:text-white/70",
