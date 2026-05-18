@@ -1,10 +1,9 @@
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { MacDownloadButton } from "@/components/mac-download-button";
 import { ExternalLink } from "lucide-react";
 import type { GitHubStats } from "@/lib/github";
 import { formatCount } from "@/lib/github";
-import Link from "next/link";
+import { ScrollToDownloadsButton } from "@/components/scroll-to-downloads-button";
 
 const GITHUB_REPO = "https://github.com/wuon/openanime";
 
@@ -13,13 +12,6 @@ interface HeroProps {
 }
 
 export function Hero({ stats }: HeroProps) {
-  const macDownloadUrl =
-    stats.downloadLinks.mac ??
-    `${GITHUB_REPO}/releases/download/v2.1.5-alpha/Openanime-darwin-arm64-2.1.5-alpha.zip`;
-  const windowsDownloadUrl =
-    stats.downloadLinks.windows ??
-    `${GITHUB_REPO}/releases/download/v2.1.5-alpha/Openanime-2.1.5-alpha.Setup.exe`;
-
   return (
     <div className="relative z-10 flex min-h-screen flex-col text-white">
       <div
@@ -67,13 +59,13 @@ export function Hero({ stats }: HeroProps) {
         </div>
       </header>
 
-      <div className="flex flex-1 flex-col justify-end px-6 pb-10 md:px-10 md:pb-14 lg:px-12 lg:pb-16 xl:px-16">
-        <div className="flex w-full flex-col items-start gap-10 lg:flex-row lg:items-end lg:justify-between">
+      <div className="flex flex-1 flex-col justify-center px-6 py-10 md:px-10 lg:justify-end lg:px-12 lg:py-0 lg:pb-16 xl:px-16">
+        <div className="flex w-full flex-col items-start gap-8 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
           <div className="max-w-2xl">
             <h1 className="mb-6 text-4xl font-semibold leading-[1.1] tracking-tight text-balance sm:text-5xl md:text-6xl lg:text-7xl">
               Anime streaming
               <br />
-              <span className="text-white/70">with a modern desktop UI</span>
+              <span className="text-white/70">all in one clean app</span>
             </h1>
 
             <p className="mb-10 max-w-lg text-lg leading-relaxed text-white/75 md:text-xl">
@@ -83,31 +75,13 @@ export function Hero({ stats }: HeroProps) {
             </p>
 
             <div className="flex flex-wrap items-center gap-3">
-              <MacDownloadButton
-                downloadUrl={macDownloadUrl}
-                isDirectDownload={
-                  !!stats.downloadLinks.mac || !!stats.latestRelease
-                }
-              />
-              <Button
-                size="lg"
-                className="h-12 cursor-pointer gap-2 rounded-full px-6 text-base"
-                asChild
-              >
-                <Link
-                  href={windowsDownloadUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Download for Windows
-                </Link>
-              </Button>
+              <ScrollToDownloadsButton />
             </div>
           </div>
 
-          <div className="flex items-center self-start lg:shrink-0 lg:self-end">
+          <div className="flex w-full items-center lg:w-auto lg:shrink-0 lg:self-end">
             <div>
-              <div className="text-2xl font-semibold">
+              <div className="text-lg font-semibold md:text-xl">
                 {stats.downloads > 0 ? `${formatCount(stats.downloads)}+` : "—"}
               </div>
               <div className="text-sm text-white/65">Downloads</div>
@@ -124,7 +98,7 @@ export function Hero({ stats }: HeroProps) {
               rel="noopener noreferrer"
               className="text-white/65 transition-colors hover:text-white"
             >
-              <div className="text-2xl font-semibold">
+              <div className="text-lg font-semibold md:text-xl">
                 {stats.stars > 0 ? `${formatCount(stats.stars)}+` : "—"}
               </div>
               <div className="text-sm">GitHub Stars</div>
@@ -141,7 +115,7 @@ export function Hero({ stats }: HeroProps) {
               rel="noopener noreferrer"
               className="text-white/65 transition-colors hover:text-white"
             >
-              <div className="text-2xl font-semibold">
+              <div className="text-lg font-semibold md:text-xl">
                 {stats.latestRelease ? `v${stats.latestRelease}` : "—"}
               </div>
               <div className="text-sm">Latest Release</div>
