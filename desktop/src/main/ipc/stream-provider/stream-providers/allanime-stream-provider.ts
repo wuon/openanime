@@ -5,7 +5,7 @@
 import { getElectronUserAgent } from "@/main/electron-user-agent";
 import { Episode, ShowSearchResult } from "@/shared/types";
 
-import { ALLANIME_REFERER, allAnimeGql } from "../allanime-gql";
+import { ALLANIME_REFERER, allAnimeGql, normalizeAllAnimePayload } from "../allanime-gql";
 import { StreamMode, StreamProvider, StreamUrlResult } from "./stream-provider";
 
 const ALLANIME_BASE = "allanime.day";
@@ -21,10 +21,6 @@ const EPISODE_EMBED_GQL = `query ($showId: String!, $translationType: VaildTrans
 // internal "slugTime" error from the API.
 const EPISODE_EMBED_PERSISTED_HASH =
   "d405d0edd690624b66baba3068e0edc3ac90f1597d898a1ec8db4e5c43c00fec";
-// Persisted-query SHA-256 hash for the `shows` query (search + recent uploads).
-// AllAnime's POST path for this query now returns 200 with empty edges; the persisted
-// GET that the web UI uses still returns real results.
-const SHOWS_PERSISTED_HASH = "a24c500a1b765c68ae1d8dd85174931f661c71369c89b92b88b75a725afc471c";
 
 const RECENT_UPLOADS_GQL = `
   query (
@@ -207,6 +203,7 @@ const OBFUSCATED_DECODE_TABLE: Record<string, string> = {
 interface SourceUrl {
   sourceName?: string;
   sourceUrl?: string;
+  priority?: number;
 }
 
 interface EpisodeResponse {
@@ -233,7 +230,10 @@ interface ProviderPayloadExtract {
   m3u8Referer: string;
 }
 
-const SUPPORTED_SOURCE_NAMES = new Set(["Default", "Yt-mp4", "S-mp4", "Mp4"]);
+const SUPPORTED_SOURCE_NAMES = new Set(["Default", "Luf-Mp4", "Yt-mp4", "S-mp4", "Mp4"]);
+
+const CLOCK_STUB_RETRY_ATTEMPTS = 4;
+const CLOCK_STUB_RETRY_DELAY_MS = 400;
 
 function toAbsoluteAllAnimeUrl(pathOrUrl: string): string {
   return pathOrUrl.startsWith("http") ? pathOrUrl : `https://${ALLANIME_BASE}${pathOrUrl}`;
@@ -268,16 +268,32 @@ function extractMp4UploadLink(html: string): string | null {
   return match[1].replace(/\\u0026/g, "&").replace(/\\/g, "");
 }
 
-function isSupportedObfuscatedSource(source: SourceUrl): boolean {
-  return Boolean(
-    source.sourceUrl?.startsWith("--") &&
-      source.sourceName &&
-      SUPPORTED_SOURCE_NAMES.has(source.sourceName)
-  );
+function isResolvableSource(source: SourceUrl): boolean {
+  const url = source.sourceUrl;
+  if (!url || !source.sourceName) return false;
+  if (!SUPPORTED_SOURCE_NAMES.has(source.sourceName)) return false;
+  return url.startsWith("--") || url.startsWith("http://") || url.startsWith("https://");
 }
 
 function getEpisodeSources(json: EpisodeResponse): SourceUrl[] {
-  return (json.data?.episode?.sourceUrls ?? []).filter(isSupportedObfuscatedSource);
+  return (json.data?.episode?.sourceUrls ?? [])
+    .filter(isResolvableSource)
+    .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+}
+
+function isProviderPayloadPending(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const links = (payload as { links?: unknown }).links;
+  if (!Array.isArray(links)) return false;
+  return links.some((item) => {
+    if (!item || typeof item !== "object") return false;
+    const record = item as { link?: string; resolutionStr?: string };
+    return typeof record.resolutionStr === "string" && typeof record.link !== "string";
+  });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function logStep(label: string, startedAt: number, extra?: string): void {
@@ -463,15 +479,82 @@ async function buildCandidateFromProviderPayload(
   };
 }
 
+async function fetchMp4UploadCandidates(embedUrl: string): Promise<StreamCandidate[]> {
+  const mp4StartedAt = Date.now();
+  const mp4Res = await fetchWithTimeout(embedUrl, {
+    method: "GET",
+    headers: {
+      Referer: ALLANIME_REFERER,
+      "User-Agent": getElectronUserAgent(),
+    },
+  });
+  if (!mp4Res.ok) {
+    logStep("mp4upload fetch failed", mp4StartedAt, `status=${mp4Res.status}`);
+    return [];
+  }
+  const html = await mp4Res.text();
+  const mp4Link = extractMp4UploadLink(html);
+  logStep("mp4upload extract", mp4StartedAt, mp4Link ? "ok" : "no-link");
+  if (!mp4Link) return [];
+  return [{ url: mp4Link, quality: 0, referer: MP4UPLOAD_REFERER }];
+}
+
+async function resolveDirectSourceToCandidates(
+  sourceUrl: string,
+  sourceName: string
+): Promise<StreamCandidate[]> {
+  if (sourceName === "Yt-mp4") {
+    return [{ url: sourceUrl, quality: 0, referer: refererForDirectUrl(sourceUrl) }];
+  }
+  if (sourceName === "Mp4") {
+    return fetchMp4UploadCandidates(sourceUrl);
+  }
+  return [];
+}
+
+async function fetchProviderPayload(providerUrl: string): Promise<unknown> {
+  let lastPayload: unknown = null;
+  for (let attempt = 0; attempt < CLOCK_STUB_RETRY_ATTEMPTS; attempt++) {
+    const providerRes = await fetchWithTimeout(providerUrl, {
+      method: "GET",
+      headers: {
+        Referer: ALLANIME_REFERER,
+        "User-Agent": getElectronUserAgent(),
+      },
+    });
+    if (!providerRes.ok) {
+      throw new Error(`Provider fetch failed with status ${providerRes.status}`);
+    }
+    const json: unknown = JSON.parse(await providerRes.text());
+    lastPayload = normalizeAllAnimePayload(json);
+    if (!isProviderPayloadPending(lastPayload)) {
+      return lastPayload;
+    }
+    if (attempt < CLOCK_STUB_RETRY_ATTEMPTS - 1) {
+      await sleep(CLOCK_STUB_RETRY_DELAY_MS * (attempt + 1));
+    }
+  }
+  return lastPayload;
+}
+
 async function resolveSourceToCandidates(
   sourceUrl: string,
   sourceName?: string
 ): Promise<StreamCandidate[]> {
+  if (
+    sourceName &&
+    (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://"))
+  ) {
+    return resolveDirectSourceToCandidates(sourceUrl, sourceName);
+  }
+
   const decodeStartedAt = Date.now();
   const decodedPath = decodeObfuscatedProviderPath(sourceUrl);
   logStep("provider path decode", decodeStartedAt);
 
   const providerUrl = toAbsoluteAllAnimeUrl(decodedPath);
+
+  logStep("provider url", decodeStartedAt, providerUrl);
 
   // Provider behavior: Yt-mp4 (fast4speed) decoded path is already a direct playable URL.
   if (sourceName === "Yt-mp4") {
@@ -482,41 +565,21 @@ async function resolveSourceToCandidates(
 
   // Provider behavior: Mp4 (mp4upload) decoded path is an HTML embed; scrape the .mp4 link.
   if (sourceName === "Mp4") {
-    const mp4StartedAt = Date.now();
-    const mp4Res = await fetchWithTimeout(providerUrl, {
-      method: "GET",
-      headers: {
-        Referer: ALLANIME_REFERER,
-        "User-Agent": getElectronUserAgent(),
-      },
-    });
-    if (!mp4Res.ok) {
-      logStep("mp4upload fetch failed", mp4StartedAt, `status=${mp4Res.status}`);
-      return [];
-    }
-    const html = await mp4Res.text();
-    const mp4Link = extractMp4UploadLink(html);
-    logStep("mp4upload extract", mp4StartedAt, mp4Link ? "ok" : "no-link");
-    if (!mp4Link) return [];
-    return [{ url: mp4Link, quality: 0, referer: MP4UPLOAD_REFERER }];
+    return fetchMp4UploadCandidates(providerUrl);
   }
 
   const providerFetchStartedAt = Date.now();
-  const providerRes = await fetchWithTimeout(providerUrl, {
-    method: "GET",
-    headers: {
-      Referer: ALLANIME_REFERER,
-      "User-Agent": getElectronUserAgent(),
-    },
-  });
-  if (!providerRes.ok) {
-    logStep("provider fetch failed", providerFetchStartedAt, `status=${providerRes.status}`);
+  let payload: unknown;
+  try {
+    payload = await fetchProviderPayload(providerUrl);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    logStep("provider fetch failed", providerFetchStartedAt, message);
     return [];
   }
   logStep("provider fetch", providerFetchStartedAt);
 
   const extractStartedAt = Date.now();
-  const payload = (await providerRes.json()) as unknown;
   const extracted: ProviderPayloadExtract = { candidates: [], m3u8Referer: "" };
   collectProviderCandidates(payload, extracted);
   logStep("provider candidate extraction", extractStartedAt, `raw=${extracted.candidates.length}`);
@@ -568,10 +631,14 @@ export class AllAnimeStreamProvider implements StreamProvider {
 
     const sourceFilterStartedAt = Date.now();
     const selectedSources = getEpisodeSources(json);
-    logStep("source filtering", sourceFilterStartedAt, `obfuscated=${selectedSources.length}`);
+    logStep(
+      "source filtering",
+      sourceFilterStartedAt,
+      `selected=${selectedSources.length}`
+    );
 
     if (selectedSources.length === 0) {
-      throw new Error("No obfuscated allanime sources found for this episode");
+      throw new Error("No playable allanime sources found for this episode");
     }
 
     const providerStartedAt = Date.now();
@@ -619,11 +686,9 @@ export class AllAnimeStreamProvider implements StreamProvider {
       countryOrigin: "ALL",
     };
 
-    const json = await allAnimeGql<GqlSearchResponse>(
-      variables,
-      RECENT_UPLOADS_GQL,
-      SHOWS_PERSISTED_HASH
-    );
+    // Use POST (no persisted-query GET): the gateway's registered shows hash returns a
+    // minimal selection set without aniListId, which breaks AniList enrichment and routing.
+    const json = await allAnimeGql<GqlSearchResponse>(variables, RECENT_UPLOADS_GQL);
     const edges = json.data?.shows?.edges ?? [];
 
     const episodes = edges.map((edge) => {
@@ -657,11 +722,7 @@ export class AllAnimeStreamProvider implements StreamProvider {
       countryOrigin: "ALL",
     };
 
-    const json = await allAnimeGql<GqlSearchResponse>(
-      variables,
-      SEARCH_GQL,
-      SHOWS_PERSISTED_HASH
-    );
+    const json = await allAnimeGql<GqlSearchResponse>(variables, SEARCH_GQL);
     const edges = json.data?.shows?.edges ?? [];
 
     const shows = edges.map((edge) => {

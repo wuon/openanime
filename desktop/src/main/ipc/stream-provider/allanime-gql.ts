@@ -54,9 +54,9 @@ function decryptTobeparsed(blobBase64: string): unknown {
   return parseDecryptedPayload(decrypted.toString("utf8"));
 }
 
-function normalizeTobeparsed(value: unknown): unknown {
+export function normalizeAllAnimePayload(value: unknown): unknown {
   if (Array.isArray(value)) {
-    return value.map((item) => normalizeTobeparsed(item));
+    return value.map((item) => normalizeAllAnimePayload(item));
   }
 
   if (!value || typeof value !== "object") {
@@ -66,14 +66,14 @@ function normalizeTobeparsed(value: unknown): unknown {
   const record = value as Record<string, unknown>;
   const normalized: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(record)) {
-    normalized[key] = normalizeTobeparsed(entry);
+    normalized[key] = normalizeAllAnimePayload(entry);
   }
 
   const encrypted =
     typeof normalized[TOBE_PARSED_FIELD] === "string" ? normalized[TOBE_PARSED_FIELD] : null;
   if (encrypted) {
     try {
-      const decrypted = normalizeTobeparsed(decryptTobeparsed(encrypted));
+      const decrypted = normalizeAllAnimePayload(decryptTobeparsed(encrypted));
       delete normalized[TOBE_PARSED_FIELD];
 
       if (decrypted && typeof decrypted === "object" && !Array.isArray(decrypted)) {
@@ -159,7 +159,7 @@ export async function allAnimeGql<T>(
   if (persistedQueryHash) {
     const getResult = await tryPersistedQueryGet(variables, persistedQueryHash);
     if (getResult) {
-      return normalizeTobeparsed(getResult) as T;
+      return normalizeAllAnimePayload(getResult) as T;
     }
   }
 
@@ -181,5 +181,5 @@ export async function allAnimeGql<T>(
   }
 
   const json = (await res.json()) as unknown;
-  return normalizeTobeparsed(json) as T;
+  return normalizeAllAnimePayload(json) as T;
 }
