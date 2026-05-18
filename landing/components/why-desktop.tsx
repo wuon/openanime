@@ -24,11 +24,6 @@ const reasons = [
 export function WhyDesktop() {
   return (
     <section className="relative border-t border-white/10 bg-black px-6 py-24 md:px-10 md:py-32 lg:px-12 xl:px-16">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.03] to-transparent"
-      />
-
       <div className="relative mx-auto max-w-6xl">
         <div className="mb-16 max-w-2xl">
           <p className="mb-3 text-sm font-medium tracking-wide text-white/50 uppercase">

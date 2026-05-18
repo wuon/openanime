@@ -24,11 +24,6 @@ export function DownloadsSection({ stats }: DownloadsSectionProps) {
       id="downloads"
       className="relative scroll-mt-6 border-t border-white/10 bg-black px-6 py-24 md:px-10 md:py-32 lg:px-12 xl:px-16"
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/3 to-transparent"
-      />
-
       <div className="relative mx-auto max-w-6xl">
         <div className="mb-16 max-w-2xl">
           <p className="mb-3 text-sm font-medium tracking-wide text-white/50 uppercase">
@@ -82,8 +77,12 @@ export function DownloadsSection({ stats }: DownloadsSectionProps) {
                       key={`${row.format}-${row.architecture}-${row.url}`}
                       className={`${TABLE_COLS} items-center border-b border-white/6 py-3.5 text-left text-sm last:border-b-0`}
                     >
-                      <span className="min-w-0 text-white/85">{row.architecture}</span>
-                      <span className="min-w-0 text-white/60">{row.format}</span>
+                      <span className="min-w-0 text-white/85">
+                        {row.architecture}
+                      </span>
+                      <span className="min-w-0 text-white/60">
+                        {row.format}
+                      </span>
                       <span className="truncate text-white/60 tabular-nums">
                         {row.sizeLabel}
                       </span>

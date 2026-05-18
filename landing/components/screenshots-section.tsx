@@ -108,11 +108,6 @@ export function ScreenshotsSection() {
         }
       }}
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/3 to-transparent"
-      />
-
       <div className="relative mx-auto max-w-6xl">
         <div className="mb-12 max-w-2xl md:mb-16">
           <p className="mb-3 text-sm font-medium tracking-wide text-white/50 uppercase">
