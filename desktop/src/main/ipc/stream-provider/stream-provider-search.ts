@@ -3,12 +3,21 @@
  * See https://github.com/pystardust/ani-cli (search_anime function).
  */
 
-import { allAnimeGql } from "./allanime-gql";
+import { allAnimeGql } from "./stream-providers/allanime/allanime-gql";
 import { streamProviders, StreamProviderName } from "./stream-providers/stream-provider";
 
-interface AnimePaheProviderBridge {
+interface NativeStreamProviderBridge {
   getEpisodesList(providerId: string): Promise<string[]>;
   getShowDetails(providerId: string): Promise<ShowDetails>;
+}
+
+function getNativeStreamProvider(
+  provider: StreamProviderName
+): NativeStreamProviderBridge | null {
+  if (provider === "animepahe" || provider === "reanime") {
+    return streamProviders[provider] as unknown as NativeStreamProviderBridge;
+  }
+  return null;
 }
 
 /**
@@ -33,12 +42,12 @@ export async function getEpisodesList(
   provider: StreamProviderName,
   mode: "sub" | "dub" = "sub"
 ): Promise<string[]> {
-  if (provider === "animepahe") {
-    if (mode === "dub") {
+  const nativeProvider = getNativeStreamProvider(provider);
+  if (nativeProvider) {
+    if (provider === "animepahe" && mode === "dub") {
       return [];
     }
-    const animepaheProvider = streamProviders.animepahe as unknown as AnimePaheProviderBridge;
-    return animepaheProvider.getEpisodesList(providerId);
+    return nativeProvider.getEpisodesList(providerId);
   }
 
   const variables = { showId: providerId };
@@ -84,9 +93,9 @@ export async function getShowDetails(
   providerId: string,
   provider: StreamProviderName
 ): Promise<ShowDetails> {
-  if (provider === "animepahe") {
-    const animepaheProvider = streamProviders.animepahe as unknown as AnimePaheProviderBridge;
-    return animepaheProvider.getShowDetails(providerId);
+  const nativeProvider = getNativeStreamProvider(provider);
+  if (nativeProvider) {
+    return nativeProvider.getShowDetails(providerId);
   }
 
   const variables = { showId: providerId };

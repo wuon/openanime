@@ -5,8 +5,8 @@
 import { getElectronUserAgent } from "@/main/electron-user-agent";
 import { Episode, ShowSearchResult } from "@/shared/types";
 
-import { ALLANIME_REFERER, allAnimeGql, normalizeAllAnimePayload } from "../allanime-gql";
-import { StreamMode, StreamProvider, StreamUrlResult } from "./stream-provider";
+import { ALLANIME_REFERER, allAnimeGql, normalizeAllAnimePayload } from "./allanime-gql";
+import { StreamMode, StreamProvider, StreamUrlResult } from "../stream-provider";
 
 const ALLANIME_BASE = "allanime.day";
 const IS_DEV = process.env.NODE_ENV !== "production";

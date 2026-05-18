@@ -115,7 +115,7 @@ function canonicalizeRichShowDetails(
 export function useShowDetails(
   animeId?: string,
   providerId?: string,
-  providerOverride?: "allanime" | "animepahe"
+  providerOverride?: "allanime" | "animepahe" | "reanime"
 ): UseShowDetailsResult {
   const [details, setDetails] = useState<RichShowDetails | null>(null);
   const [episodesByMode, setEpisodesByMode] = useState<Record<AnimeMode, EpisodesState>>({

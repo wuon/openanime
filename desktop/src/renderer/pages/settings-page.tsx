@@ -418,7 +418,7 @@ export function SettingsPage() {
         <Select
           value={activeStreamProvider}
           onValueChange={(value) => {
-            if (value === "allanime" || value === "animepahe") {
+            if (value === "allanime" || value === "animepahe" || value === "reanime") {
               void onStreamProviderChange(value);
             }
           }}
@@ -430,6 +430,7 @@ export function SettingsPage() {
           <SelectContent>
             <SelectItem value="allanime">AllAnime</SelectItem>
             <SelectItem value="animepahe">AnimePahe</SelectItem>
+            <SelectItem value="reanime">Reanime</SelectItem>
           </SelectContent>
         </Select>
       </section>

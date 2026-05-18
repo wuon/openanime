@@ -25,7 +25,8 @@ import { StreamProviderName, streamProviders } from "./stream-providers/stream-p
 const DEFAULT_STREAM_PROVIDER: StreamProviderName = "allanime";
 
 function normalizeProvider(value: unknown): StreamProviderName {
-  return value === "animepahe" ? "animepahe" : "allanime";
+  if (value === "animepahe" || value === "reanime") return value;
+  return "allanime";
 }
 
 function getActiveStreamProviderName(): StreamProviderName {
