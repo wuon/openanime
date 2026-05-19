@@ -4,7 +4,6 @@
  */
 import { spawn } from "child_process";
 import { createHash } from "crypto";
-import { session } from "electron";
 import { accessSync, constants, createReadStream } from "fs";
 import { mkdir, rename, stat, unlink } from "fs/promises";
 import type { IncomingMessage, ServerResponse } from "http";
@@ -16,11 +15,7 @@ import { pipeline } from "stream/promises";
 import { URL } from "url";
 
 import { getElectronUserAgent } from "@/main/electron-user-agent";
-import {
-  FLIXCLOUD_PARTITION,
-  FLIXCLOUD_REFERER,
-  isFlixcloudHost,
-} from "@/main/ipc/stream-provider/stream-providers/reanime/constants";
+import { fetchUpstream, normalizeStreamReferer } from "@/main/stream-proxy-upstream";
 
 let server: http.Server | null = null;
 let proxyPort = 0;
@@ -33,60 +28,6 @@ const transcodeJobs = new Map<string, Promise<string>>();
 const transcodeProgress = new Map<string, TranscodeProgressSnapshot>();
 const TRANSCODE_MAX_ATTEMPTS = 3;
 const TRANSCODE_RETRY_DELAYS_MS = [1200, 2500];
-/** Embed URLs (flixcloud.cc/e/…) are not valid referrers for fetch1.flixcloud.cc CDN requests. */
-function normalizeStreamReferer(targetUrl: string, referer: string | null): string | null {
-  if (!referer?.trim()) return referer;
-  try {
-    const target = new URL(targetUrl);
-    const ref = new URL(referer);
-    if (
-      isFlixcloudHost(target.hostname) &&
-      isFlixcloudHost(ref.hostname) &&
-      ref.origin !== target.origin
-    ) {
-      return FLIXCLOUD_REFERER;
-    }
-    if (isFlixcloudHost(target.hostname) && ref.pathname.startsWith("/e/")) {
-      return FLIXCLOUD_REFERER;
-    }
-  } catch {
-    // keep original referer
-  }
-  return referer;
-}
-
-/**
- * Upstream fetch strategy differs by CDN:
- * - Flixcloud: prefer the persisted embed session (Cloudflare cookies), then fall back.
- * - Allanime / animepahe / other hosts: global `fetch` (Node/Chromium stack that worked before reanime).
- */
-async function fetchUpstream(
-  targetUrl: string,
-  headers: Record<string, string>,
-  signal: AbortSignal
-): Promise<Response> {
-  let hostname: string | undefined;
-  try {
-    hostname = new URL(targetUrl).hostname;
-  } catch {
-    return fetch(targetUrl, { headers, signal });
-  }
-
-  if (isFlixcloudHost(hostname)) {
-    try {
-      return await session.fromPartition(FLIXCLOUD_PARTITION).fetch(targetUrl, { headers, signal });
-    } catch (err: unknown) {
-      if (IS_DEV) {
-        console.warn("[stream-proxy] flixcloud session fetch failed, using fetch fallback", {
-          targetUrl: targetUrl.slice(0, 96),
-          message: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-  }
-
-  return fetch(targetUrl, { headers, signal });
-}
 
 function getInputPermissiveHlsArgs(): string[] {
   const args = [

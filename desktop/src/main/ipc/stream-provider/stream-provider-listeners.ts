@@ -1,6 +1,7 @@
 import { ipcMain } from "electron";
 
 import { getEpisodesList, getShowDetails } from "@/main/ipc/stream-provider/stream-provider-search";
+import { registerStreamUpstreamHandler } from "@/main/stream-proxy-upstream";
 import { appStore } from "@/main/store";
 import {
   getStreamProxyBaseUrl,
@@ -20,9 +21,12 @@ import {
   STREAM_PROVIDER_STREAM_URL_CHANNEL,
   STREAM_PROVIDER_TRANSCODE_PROGRESS_CHANNEL,
 } from "./stream-provider-channels";
+import { reanimeStreamUpstreamHandler } from "./stream-providers/reanime/reanime-stream-upstream";
 import { StreamProviderName, streamProviders } from "./stream-providers/stream-provider";
 
 const DEFAULT_STREAM_PROVIDER: StreamProviderName = "allanime";
+
+registerStreamUpstreamHandler(reanimeStreamUpstreamHandler);
 
 function normalizeProvider(value: unknown): StreamProviderName {
   if (value === "animepahe" || value === "reanime") return value;
