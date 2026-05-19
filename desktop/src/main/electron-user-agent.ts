@@ -22,3 +22,8 @@ export function getElectronUserAgent(): string {
   }
   return cached;
 }
+
+/** Apply the normalized UA to the default session (renderer fetch, navigator.userAgent). */
+export function initElectronUserAgent(): void {
+  session.defaultSession.setUserAgent(getElectronUserAgent());
+}

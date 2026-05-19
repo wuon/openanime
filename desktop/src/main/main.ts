@@ -4,6 +4,7 @@ import started from "electron-squirrel-startup";
 import path from "path";
 import { type IUpdateElectronAppOptions, updateElectronApp } from "update-electron-app";
 
+import { initElectronUserAgent } from "@/main/electron-user-agent";
 import { APP_PROTOCOL, completeAniListOAuthFromDeepLink } from "@/main/ipc/anilist/anilist-oauth";
 import { registerListeners, unregisterListeners } from "@/main/ipc/listeners";
 import { startStreamProxy } from "@/main/stream-proxy";
@@ -80,6 +81,7 @@ const createWindow = () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on("ready", () => {
+  initElectronUserAgent();
   registerAppProtocol();
   registerListeners();
   void startStreamProxy().then(() => {
