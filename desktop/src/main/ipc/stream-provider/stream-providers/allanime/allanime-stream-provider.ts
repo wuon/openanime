@@ -604,6 +604,32 @@ async function resolveSourceToCandidates(
   return streamCandidates;
 }
 
+async function resolveSourceGroup(
+  sources: SourceUrl[]
+): Promise<StreamCandidate[]> {
+  const candidateGroups = await Promise.all(
+    sources.map(async (source) => {
+      const sourceUrl = source.sourceUrl;
+      if (!sourceUrl) return [];
+
+      const sourceStartedAt = Date.now();
+      try {
+        const candidates = await resolveSourceToCandidates(sourceUrl, source.sourceName);
+        logStep(`provider resolve: ${source.sourceName ?? "unknown"}`, sourceStartedAt);
+        return candidates;
+      } catch (error: unknown) {
+        logStep(
+          `provider resolve failed: ${source.sourceName ?? "unknown"}`,
+          sourceStartedAt,
+          error instanceof Error ? error.message : "unknown error"
+        );
+        return [];
+      }
+    })
+  );
+  return candidateGroups.flat();
+}
+
 export class AllAnimeStreamProvider implements StreamProvider {
   async getStreamUrl(
     _id: string | null,
@@ -642,28 +668,27 @@ export class AllAnimeStreamProvider implements StreamProvider {
     }
 
     const providerStartedAt = Date.now();
-    const candidateGroups = await Promise.all(
-      selectedSources.map(async (source) => {
-        const sourceUrl = source.sourceUrl;
-        if (!sourceUrl) return [];
 
-        const sourceStartedAt = Date.now();
-        try {
-          const candidates = await resolveSourceToCandidates(sourceUrl, source.sourceName);
-          logStep(`provider resolve: ${source.sourceName ?? "unknown"}`, sourceStartedAt);
-          return candidates;
-        } catch (error: unknown) {
-          logStep(
-            `provider resolve failed: ${source.sourceName ?? "unknown"}`,
-            sourceStartedAt,
-            error instanceof Error ? error.message : "unknown error"
-          );
-          return [];
-        }
-      })
-    );
-    const allCandidates = candidateGroups.flat();
-    logStep("provider resolution total", providerStartedAt, `candidates=${allCandidates.length}`);
+    // Yt-mp4 decodes to a direct URL with no clock.json fetch; resolve it alone so a
+    // slow or timing-out provider (e.g. Luf-Mp4 at 25s) does not block playback.
+    const ytMp4Source = selectedSources.find((source) => source.sourceName === "Yt-mp4");
+    let allCandidates: StreamCandidate[] = [];
+    if (ytMp4Source?.sourceUrl) {
+      allCandidates = await resolveSourceGroup([ytMp4Source]);
+      if (allCandidates.length > 0) {
+        logStep(
+          "provider resolution total",
+          providerStartedAt,
+          `candidates=${allCandidates.length} (yt-mp4 fast path)`
+        );
+      }
+    }
+
+    if (allCandidates.length === 0) {
+      const fallbackSources = selectedSources.filter((source) => source.sourceName !== "Yt-mp4");
+      allCandidates = await resolveSourceGroup(fallbackSources);
+      logStep("provider resolution total", providerStartedAt, `candidates=${allCandidates.length}`);
+    }
 
     const best = selectBestCandidate(allCandidates);
     if (!best) {
