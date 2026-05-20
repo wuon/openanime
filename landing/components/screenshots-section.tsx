@@ -1,10 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { cn } from "@/lib/utils";
-
-const ROTATE_INTERVAL_MS = 5000;
 
 type Screenshot = {
   id: string;
@@ -70,7 +68,6 @@ const screenshots = allScreenshots.filter((shot) => shot.enabled !== false);
 
 export function ScreenshotsSection() {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
   const count = screenshots.length;
   const active = screenshots[activeIndex];
 
@@ -81,33 +78,8 @@ export function ScreenshotsSection() {
     [count],
   );
 
-  useEffect(() => {
-    if (isPaused) return;
-
-    const prefersReducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    if (prefersReducedMotion) return;
-
-    const timer = window.setInterval(() => {
-      setActiveIndex((current) => (current + 1) % count);
-    }, ROTATE_INTERVAL_MS);
-
-    return () => window.clearInterval(timer);
-  }, [activeIndex, count, isPaused]);
-
   return (
-    <section
-      className="relative border-t border-white/10 bg-black px-6 py-24 md:px-10 md:py-32 lg:px-12 xl:px-16"
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
-      onFocusCapture={() => setIsPaused(true)}
-      onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          setIsPaused(false);
-        }
-      }}
-    >
+    <section className="relative border-t border-white/10 bg-black px-6 py-24 md:px-10 md:py-32 lg:px-12 xl:px-16">
       <div className="relative mx-auto max-w-6xl">
         <div className="mb-12 max-w-2xl md:mb-16">
           <p className="mb-3 text-sm font-medium tracking-wide text-white/50 uppercase">
@@ -122,7 +94,7 @@ export function ScreenshotsSection() {
         </div>
 
         <div aria-live="polite" aria-atomic="true">
-          <div className="mb-6 overflow-hidden rounded-2xl border border-white/10 bg-white/3 shadow-[0_0_80px_-20px_rgba(255,255,255,0.12)] md:mb-8">
+          <div className="mb-6 overflow-hidden rounded-2xl border border-white/10 bg-white/3 md:mb-8">
             <Image
               key={active.src}
               src={active.src}
