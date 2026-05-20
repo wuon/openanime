@@ -41,11 +41,6 @@ export function SettingsPage() {
   const [streamProviderBusy, setStreamProviderBusy] = useState(false);
 
   useEffect(() => {
-    if (!isDevelopment) {
-      setStreamProviderLoading(false);
-      return;
-    }
-
     let cancelled = false;
     void window.streamProvider
       .getActiveProvider()
@@ -62,7 +57,7 @@ export function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [isDevelopment]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
