@@ -22,7 +22,7 @@ Openanime is an easy-to-use desktop anime application with a provider-based arch
 
 ## Installation
 
-### Windows (Experimental)
+### Windows
 
 [![Windows - Download](https://img.shields.io/badge/Windows-download-blue)](https://github.com/wuon/openanime/releases/download/v2.1.6-alpha/Openanime-2.1.6-alpha.Setup.exe)
 
