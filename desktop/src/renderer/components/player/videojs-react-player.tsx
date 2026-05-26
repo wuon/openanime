@@ -2,12 +2,23 @@ import { createPlayer } from "@videojs/react";
 import { HlsVideo } from "@videojs/react/media/hls-video";
 import { Video, VideoSkin, videoFeatures } from "@videojs/react/video";
 import "@videojs/react/video/skin.css";
-import React from "react";
+import React, { memo, useMemo } from "react";
 
 import "./videojs-react-player.css";
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- beta package types currently resolve createPlayer as any in this toolchain.
 const Player = createPlayer({ features: videoFeatures });
+
+/**
+ * Stable references for HlsVideo props. These MUST be module-level — passing
+ * a fresh object/string on every render causes @videojs/react's HlsVideo to
+ * destroy and re-create the hls.js instance, which re-loads the playlist and
+ * re-fetches segments from the start (causing playback to jump back to 0
+ * whenever the parent re-renders, e.g. on mouse move showing controls).
+ */
+const HLS_VIDEO_CONFIG = { defaultAudioCodec: "mp4a.40.2" } as const;
+const HLS_SOURCE_TYPE = "application/vnd.apple.mpegurl";
+const HLS_PREFER_PLAYBACK = "mse";
 
 interface VideoJsReactPlayerProps {
   src?: string;
@@ -25,7 +36,7 @@ function isHlsSourceUrl(src?: string): boolean {
   if (/\.m3u8(?:$|\?)/i.test(src)) return true;
   try {
     const parsed = new URL(src);
-    if (parsed.searchParams.get("transcode") === "1") return false;
+    if (parsed.pathname.startsWith("/transcode/") && parsed.pathname.endsWith(".m3u8")) return true;
     const nested = parsed.searchParams.get("url");
     if (!nested) return false;
     return /\.m3u8(?:$|\?)/i.test(nested);
@@ -34,7 +45,19 @@ function isHlsSourceUrl(src?: string): boolean {
   }
 }
 
-export function VideoJsReactPlayer({
+/**
+ * @videojs/react@10-beta's HlsVideo computes `attachMediaElement(mediaApi)` as
+ * an inline arrow ref on every render, and `useComposedRefs` includes it in its
+ * `useCallback` deps. The composed ref therefore changes identity on every
+ * render, which makes React invoke its cleanup (`media.detach()` →
+ * `hls.detachMedia()`) and then the new ref (`hls.attachMedia()`) — producing
+ * a brief black flash on the video element whenever the parent re-renders.
+ *
+ * `React.memo` keeps this component from re-rendering when its props are
+ * unchanged (the parent shell re-renders on mouse activity, but our props
+ * here are stable references), which prevents the detach/attach cycle.
+ */
+function VideoJsReactPlayerInner({
   src,
   className,
   videoRef,
@@ -45,6 +68,11 @@ export function VideoJsReactPlayer({
   onError,
 }: VideoJsReactPlayerProps) {
   const isHlsSource = isHlsSourceUrl(src);
+  // Memoize the className string so its reference is stable across renders.
+  const mediaClassName = useMemo(
+    () => `${className ?? ""} !rounded-none !border-0`,
+    [className]
+  );
 
   return (
     <Player.Provider>
@@ -53,10 +81,10 @@ export function VideoJsReactPlayer({
           <HlsVideo
             ref={videoRef}
             src={src}
-            type="application/vnd.apple.mpegurl"
-            preferPlayback="mse"
-            config={{ defaultAudioCodec: "mp4a.40.2" }}
-            className={`${className ?? ""} !rounded-none !border-0`}
+            type={HLS_SOURCE_TYPE}
+            preferPlayback={HLS_PREFER_PLAYBACK}
+            config={HLS_VIDEO_CONFIG}
+            className={mediaClassName}
             autoPlay
             playsInline
             onLoadedMetadata={onLoadedMetadata}
@@ -69,7 +97,7 @@ export function VideoJsReactPlayer({
           <Video
             ref={videoRef}
             src={src}
-            className={`${className ?? ""} !rounded-none !border-0`}
+            className={mediaClassName}
             autoPlay
             playsInline
             onLoadedMetadata={onLoadedMetadata}
@@ -83,3 +111,5 @@ export function VideoJsReactPlayer({
     </Player.Provider>
   );
 }
+
+export const VideoJsReactPlayer = memo(VideoJsReactPlayerInner);

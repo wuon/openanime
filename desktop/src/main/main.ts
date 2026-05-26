@@ -7,7 +7,7 @@ import { type IUpdateElectronAppOptions, updateElectronApp } from "update-electr
 import { initElectronUserAgent } from "@/main/electron-user-agent";
 import { APP_PROTOCOL, completeAniListOAuthFromDeepLink } from "@/main/ipc/anilist/anilist-oauth";
 import { registerListeners, unregisterListeners } from "@/main/ipc/listeners";
-import { startStreamProxy } from "@/main/stream-proxy";
+import { shutdownTranscodeJobs, startStreamProxy } from "@/main/stream-proxy";
 
 if (started) {
   app.quit();
@@ -99,7 +99,12 @@ app.on("ready", () => {
 // explicitly with Cmd + Q.
 app.on("window-all-closed", () => {
   unregisterListeners();
+  shutdownTranscodeJobs();
   app.quit();
+});
+
+app.on("before-quit", () => {
+  shutdownTranscodeJobs();
 });
 
 app.on("activate", () => {
