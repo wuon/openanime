@@ -1,4 +1,8 @@
-import type { AniListMediaPageVariables, AniListMediaPageResult, AniListShowDetails } from "@/shared/types";
+import type {
+  AniListMediaPageResult,
+  AniListMediaPageVariables,
+  AniListShowDetails,
+} from "@/shared/types";
 
 import { postAniListGraphql } from "./anilist-api";
 
@@ -194,10 +198,7 @@ function mapPageMediaToShowDetails(raw: AniListPageMediaRaw): AniListShowDetails
 
   const next = raw.nextAiringEpisode;
   const nextAiringEpisode =
-    next &&
-    next.airingAt != null &&
-    next.timeUntilAiring != null &&
-    next.episode != null
+    next && next.airingAt != null && next.timeUntilAiring != null && next.episode != null
       ? {
           airingAt: next.airingAt,
           timeUntilAiring: next.timeUntilAiring,
@@ -257,7 +258,9 @@ function graphqlVariablesFromInput(input: AniListMediaPageVariables): Record<str
   return vars;
 }
 
-export async function fetchAniListMediaPage(variables: AniListMediaPageVariables): Promise<AniListMediaPageResult> {
+export async function fetchAniListMediaPage(
+  variables: AniListMediaPageVariables
+): Promise<AniListMediaPageResult> {
   const data = await postAniListGraphql<AniListMediaPageData>(
     ANILIST_MEDIA_PAGE_QUERY,
     graphqlVariablesFromInput(variables)

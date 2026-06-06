@@ -44,7 +44,6 @@ export async function getAniListPopularSeasonAnime(): Promise<AniListShowDetails
   const { media } = await fetchAniListMediaPage({
     page: 1,
     type: "ANIME",
-    status: "RELEASING",
     seasonYear,
     season,
     sort: ["POPULARITY_DESC"],
