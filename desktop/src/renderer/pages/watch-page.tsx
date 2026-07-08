@@ -10,7 +10,6 @@ import { type RichShowDetails, useShowDetails } from "../hooks/use-show-details"
 
 /** How many automatic reconnects after a playback error before showing the manual overlay. */
 const MAX_AUTO_RECONNECT = 5;
-const PERIODIC_HISTORY_SYNC_MS = 10_000;
 
 const IS_DEV = process.env.NODE_ENV !== "production";
 const ENABLE_HLS_SERVER_TRANSCODE = true;
@@ -122,8 +121,7 @@ export function WatchPage() {
   const lastPlaybackTimeRef = useRef<number | null>(null);
   const autoReconnectAttemptRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const historySyncInFlightRef = useRef(false);
-  /** Stream revision when load succeeded; upsert runs after show details finish loading. */
+  /** Stream revision when load succeeded; in-memory entry is enriched after show details load. */
   const deferredHistoryUpsertRef = useRef<{ revision: number; ep: string } | null>(null);
   const activeLoadTokenRef = useRef(0);
   const historyProviderRef = useRef<HistoryEntry["provider"]>("allanime");
@@ -328,36 +326,13 @@ export function WatchPage() {
     }
     lastHistoryEntryRef.current = entry;
     deferredHistoryUpsertRef.current = null;
-    void window.recentlyWatched.upsert(entry).then(
-      () => {
-        void syncHistoryProgress();
-      },
-      () => {
-        // best-effort
-      }
-    );
-  }, [showLoading, showDetails, playUrl, episode, streamRevision, syncHistoryProgress]);
+  }, [showLoading, showDetails, playUrl, episode, streamRevision]);
 
   useEffect(() => {
     return () => {
       clearReconnectTimeout();
     };
   }, [clearReconnectTimeout]);
-
-  // Periodic history sync: runs as long as a stream is loaded.
-  // Completely independent of the playing/pause event chain so it's resilient to
-  // HMR stale closures and missing onPlaying events.
-  useEffect(() => {
-    if (!playUrl) return;
-    const id = setInterval(() => {
-      if (historySyncInFlightRef.current) return;
-      historySyncInFlightRef.current = true;
-      void syncHistoryProgress().finally(() => {
-        historySyncInFlightRef.current = false;
-      });
-    }, PERIODIC_HISTORY_SYNC_MS);
-    return () => clearInterval(id);
-  }, [playUrl, syncHistoryProgress]);
 
   const onEpisodeSelect = useCallback(
     (ep: string) => {
@@ -498,7 +473,6 @@ export function WatchPage() {
       onRetryStream={retryStream}
       onLoadedMetadata={(e) => {
         applyResumeIfNeeded(e.currentTarget);
-        void syncHistoryProgress();
       }}
       onPause={handleVideoPause}
       onEnded={handleVideoEnded}
