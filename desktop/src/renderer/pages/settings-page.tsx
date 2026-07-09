@@ -11,6 +11,11 @@ import {
   SelectValue,
 } from "@/renderer/components/ui/select";
 import type { AppUpdateCheckResult } from "@/shared/app-update-types";
+import {
+  getEnabledStreamProviders,
+  isStreamProviderName,
+  STREAM_PROVIDER_LABELS,
+} from "@/shared/stream-providers";
 import type { AniListIntegrationStatus, StreamProvider } from "@/shared/types";
 
 function openExternalUrl(url: string) {
@@ -36,7 +41,10 @@ export function SettingsPage() {
   const [anilistPinToken, setAnilistPinToken] = useState("");
   const [anilistPinOpenBusy, setAnilistPinOpenBusy] = useState(false);
   const [anilistPinSubmitBusy, setAnilistPinSubmitBusy] = useState(false);
-  const [activeStreamProvider, setActiveStreamProvider] = useState<StreamProvider>("allanime");
+  const enabledStreamProviders = getEnabledStreamProviders();
+  const [activeStreamProvider, setActiveStreamProvider] = useState<StreamProvider>(
+    enabledStreamProviders[0] ?? "allanime"
+  );
   const [streamProviderLoading, setStreamProviderLoading] = useState(true);
   const [streamProviderBusy, setStreamProviderBusy] = useState(false);
 
@@ -413,25 +421,21 @@ export function SettingsPage() {
         <Select
           value={activeStreamProvider}
           onValueChange={(value) => {
-            if (
-              value === "allanime" ||
-              value === "animepahe" ||
-              value === "animeparadise" ||
-              value === "reanime"
-            ) {
+            if (isStreamProviderName(value)) {
               void onStreamProviderChange(value);
             }
           }}
-          disabled={streamProviderLoading || streamProviderBusy}
+          disabled={streamProviderLoading || streamProviderBusy || enabledStreamProviders.length === 0}
         >
           <SelectTrigger className="sm:shrink-0 w-full sm:w-[220px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="allanime">AllAnime</SelectItem>
-            <SelectItem value="animepahe">AnimePahe</SelectItem>
-            <SelectItem value="animeparadise">AnimeParadise</SelectItem>
-            <SelectItem value="reanime">Reanime</SelectItem>
+            {enabledStreamProviders.map((provider) => (
+              <SelectItem key={provider} value={provider}>
+                {STREAM_PROVIDER_LABELS[provider]}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </section>

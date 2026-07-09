@@ -3,6 +3,7 @@ import { ipcMain } from "electron";
 import { getEpisodesList, getShowDetails } from "@/main/ipc/stream-provider/stream-provider-search";
 import { registerStreamUpstreamHandler } from "@/main/stream-proxy-upstream";
 import { appStore } from "@/main/store";
+import { resolveEnabledStreamProvider } from "@/shared/stream-providers";
 import {
   getStreamProxyBaseUrl,
   getTranscodeProgress,
@@ -24,29 +25,22 @@ import {
 import { reanimeStreamUpstreamHandler } from "./stream-providers/reanime/reanime-stream-upstream";
 import { StreamProviderName, streamProviders } from "./stream-providers/stream-provider";
 
-const DEFAULT_STREAM_PROVIDER: StreamProviderName = "allanime";
-
 registerStreamUpstreamHandler(reanimeStreamUpstreamHandler);
 
-function normalizeProvider(value: unknown): StreamProviderName {
-  if (value === "animepahe" || value === "animeparadise" || value === "reanime") return value;
-  return "allanime";
-}
-
 function getActiveStreamProviderName(): StreamProviderName {
-  return normalizeProvider(appStore.get("stream.provider"));
+  return resolveEnabledStreamProvider(appStore.get("stream.provider"));
 }
 
 function setActiveStreamProviderName(provider: StreamProviderName): StreamProviderName {
-  appStore.set("stream.provider", provider);
-  return provider;
+  const resolved = resolveEnabledStreamProvider(provider);
+  appStore.set("stream.provider", resolved);
+  return resolved;
 }
 
 export function addStreamProviderListeners() {
   ipcMain.handle(STREAM_PROVIDER_ACTIVE_GET_CHANNEL, () => getActiveStreamProviderName());
   ipcMain.handle(STREAM_PROVIDER_ACTIVE_SET_CHANNEL, (_event, provider: StreamProviderName) => {
-    const normalized = normalizeProvider(provider);
-    return setActiveStreamProviderName(normalized);
+    return setActiveStreamProviderName(provider);
   });
   ipcMain.handle(STREAM_PROVIDER_SEARCH_CHANNEL, (_event, query: string) => {
     const providerName = getActiveStreamProviderName();
@@ -56,7 +50,7 @@ export function addStreamProviderListeners() {
     STREAM_PROVIDER_EPISODES_CHANNEL,
     (_event, providerId: string, mode: "sub" | "dub", providerOverride?: StreamProviderName) => {
       const providerName = providerOverride
-        ? normalizeProvider(providerOverride)
+        ? resolveEnabledStreamProvider(providerOverride)
         : getActiveStreamProviderName();
       return getEpisodesList(providerId, providerName, mode);
     }
@@ -72,7 +66,7 @@ export function addStreamProviderListeners() {
       providerOverride?: StreamProviderName
     ) => {
       const providerName = providerOverride
-        ? normalizeProvider(providerOverride)
+        ? resolveEnabledStreamProvider(providerOverride)
         : getActiveStreamProviderName();
       return streamProviders[providerName].getStreamUrl(id, providerId, episode, mode);
     }
@@ -93,7 +87,7 @@ export function addStreamProviderListeners() {
     STREAM_PROVIDER_SHOW_DETAILS_CHANNEL,
     (_event, providerId: string, providerOverride?: StreamProviderName) => {
       const providerName = providerOverride
-        ? normalizeProvider(providerOverride)
+        ? resolveEnabledStreamProvider(providerOverride)
         : getActiveStreamProviderName();
       return getShowDetails(providerId, providerName);
     }
@@ -102,7 +96,10 @@ export function addStreamProviderListeners() {
     const providerName = getActiveStreamProviderName();
     return streamProviders[providerName].getRecentUploads(page, limit ?? 12);
   });
-  if (!appStore.get("stream.provider")) {
-    appStore.set("stream.provider", DEFAULT_STREAM_PROVIDER);
+
+  const storedProvider = appStore.get("stream.provider");
+  const resolvedProvider = resolveEnabledStreamProvider(storedProvider);
+  if (storedProvider !== resolvedProvider) {
+    appStore.set("stream.provider", resolvedProvider);
   }
 }

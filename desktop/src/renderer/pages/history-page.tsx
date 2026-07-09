@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/renderer/components/ui/dropdown-menu";
 import { Skeleton } from "@/renderer/components/ui/skeleton";
+import { useResumeHistoryEntry } from "@/renderer/hooks/use-resume-history-entry";
 import { cn } from "@/renderer/lib/utils";
 import type { HistoryEntry } from "@/shared/types";
 
@@ -226,6 +227,7 @@ function formatWatchedAt(ts: number): string {
 
 export function HistoryPage() {
   const navigate = useNavigate();
+  const { resumeHistoryEntry, disabledProviderDialog } = useResumeHistoryEntry();
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -246,19 +248,6 @@ export function HistoryPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  const openEntry = useCallback(
-    (entry: HistoryEntry) => {
-      navigate("/watch", {
-        state: {
-          episode: entry.episode,
-          providerOverride: entry.provider,
-          ...(entry.currentDurationMs > 0 ? { resumeFromMs: entry.currentDurationMs } : {}),
-        },
-      });
-    },
-    [navigate]
-  );
 
   const goToShow = useCallback(
     async (entry: HistoryEntry) => {
@@ -288,6 +277,7 @@ export function HistoryPage() {
 
   return (
     <div className="w-full max-w-[1600px] mx-auto flex flex-col gap-6 p-6 md:p-8">
+      {disabledProviderDialog}
       <h1 className="text-4xl font-semibold tracking-tight">History</h1>
 
       {loading ? <HistoryStatsSkeleton /> : <HistoryStatsRow stats={stats} />}
@@ -335,7 +325,7 @@ export function HistoryPage() {
                       key={entry.id}
                       className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
                       onClick={() => {
-                        void openEntry(entry);
+                        resumeHistoryEntry(entry);
                       }}
                     >
                       <td className="px-4 py-3 w-0 align-middle">
@@ -396,7 +386,7 @@ export function HistoryPage() {
                           <DropdownMenuContent align="end" sideOffset={4} className="min-w-[12rem]">
                             <DropdownMenuItem
                               onSelect={() => {
-                                void openEntry(entry);
+                                resumeHistoryEntry(entry);
                               }}
                             >
                               Go to episode

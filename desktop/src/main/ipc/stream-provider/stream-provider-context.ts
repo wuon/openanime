@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 import { Episode, ShowSearchResult } from "@/shared/types";
+import type { StreamProviderName } from "@/shared/stream-providers";
 
 import {
   STREAM_PROVIDER_ACTIVE_GET_CHANNEL,
@@ -26,7 +27,7 @@ export interface TranscodeProgressResult {
   message: string;
 }
 
-export type StreamProviderName = "allanime" | "animepahe" | "animeparadise" | "reanime";
+export type { StreamProviderName };
 
 export function exposeStreamProviderContext() {
   contextBridge.exposeInMainWorld("streamProvider", {

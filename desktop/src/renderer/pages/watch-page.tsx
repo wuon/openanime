@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation } from "react-router-dom";
 
 import { WatchVideoPlayerShell } from "@/renderer/components/player/watch-video-player-shell";
+import { DisabledStreamProviderDialog } from "@/renderer/components/disabled-stream-provider-dialog";
 import { Button } from "@/renderer/components/ui/button";
 import { useGoBack } from "@/renderer/hooks/use-go-back";
+import { isHistoryProviderDisabled } from "@/shared/stream-providers";
 import type { Episode, HistoryEntry } from "@/shared/types";
 import { isHlsPlaylistUrl } from "@/shared/utils/hls-url";
 
@@ -78,6 +80,10 @@ export function WatchPage() {
   const state = location.state as WatchState | null;
   const resumeFromMs = state?.resumeFromMs;
   const streamProviderOverride = state?.providerOverride;
+  const disabledHistoryProvider =
+    streamProviderOverride && isHistoryProviderDisabled(streamProviderOverride)
+      ? streamProviderOverride
+      : null;
 
   const [playUrl, setPlayUrl] = useState<string>("");
   /** Bumps when a new stream URL is ready so the <video> remounts (retry after errors). */
@@ -97,7 +103,11 @@ export function WatchPage() {
     episodesByMode,
     loading: showLoading,
     error: showError,
-  } = useShowDetails(episode?.id, episode?.providerId, streamProviderOverride);
+  } = useShowDetails(
+    disabledHistoryProvider ? undefined : episode?.id,
+    disabledHistoryProvider ? undefined : episode?.providerId,
+    disabledHistoryProvider ? undefined : streamProviderOverride
+  );
 
   const episodes = useMemo(() => {
     if (!episode) return [];
@@ -296,10 +306,18 @@ export function WatchPage() {
   }, [episode?.id, episode?.providerId, episode?.index, episode?.mode]);
 
   useEffect(() => {
-    if (!episode) return;
+    if (!episode || disabledHistoryProvider) return;
     const resumeFrom = resumeFromMs != null && resumeFromMs > 0 ? resumeFromMs / 1000 : undefined;
     void loadStream(String(episode.index), resumeFrom != null ? { resumeFrom } : undefined);
-  }, [episode?.id, episode?.providerId, episode?.index, episode?.mode, loadStream, resumeFromMs]);
+  }, [
+    disabledHistoryProvider,
+    episode?.id,
+    episode?.providerId,
+    episode?.index,
+    episode?.mode,
+    loadStream,
+    resumeFromMs,
+  ]);
 
   useEffect(() => {
     if (showLoading || !episode || !playUrl) return;
@@ -441,6 +459,28 @@ export function WatchPage() {
           Go back
         </Button>
       </div>
+    );
+  }
+
+  if (disabledHistoryProvider) {
+    return (
+      <>
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 min-h-0">
+          <p className="text-muted-foreground">This watch history entry can&apos;t be resumed.</p>
+          <Button type="button" variant="outline" onClick={goBack}>
+            Go back
+          </Button>
+        </div>
+        <DisabledStreamProviderDialog
+          provider={disabledHistoryProvider}
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              goBack();
+            }
+          }}
+        />
+      </>
     );
   }
 

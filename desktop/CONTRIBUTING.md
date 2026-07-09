@@ -75,18 +75,34 @@ export interface StreamUrlResult {
 
 Search results and episodes should populate both `id` and `providerId` on `ShowSearchResult` / `Episode` (see `src/shared/types.d.ts`).
 
+## Enabling and disabling providers
+
+Ship-time toggles live in `src/shared/stream-providers.config.ts`. Set a provider to `false` to hide it from Settings and route all IPC calls (including watch-history overrides) to the first enabled provider instead.
+
+```ts
+export const streamProviderAvailability = {
+  allanime: true,
+  animepahe: true,
+  animeparadise: false, // temporarily disabled
+  reanime: true,
+} as const;
+```
+
+At least one provider must stay enabled or startup will throw. Labels and helper functions live in `src/shared/stream-providers.ts`.
+
+---
+
 ## Registering a new provider
 
-`StreamProviderName` is a closed union duplicated in several places. When adding a provider (e.g. `myprovider`), update **all** of:
+`StreamProviderName` is derived from `stream-providers.config.ts`. When adding a provider (e.g. `myprovider`), update **all** of:
 
 | File                                   | Change                                                        |
 | -------------------------------------- | ------------------------------------------------------------- |
-| `stream-providers/stream-provider.ts`  | Add to `StreamProviderName`, import class, add registry entry |
-| `stream-provider-listeners.ts`         | Extend `normalizeProvider()`                                  |
-| `stream-provider-context.ts`           | Extend `StreamProviderName`                                   |
+| `src/shared/stream-providers.config.ts`| Add provider id set to `true`                                 |
+| `src/shared/stream-providers.ts`       | Add display label in `STREAM_PROVIDER_LABELS`               |
+| `stream-providers/stream-provider.ts`  | Import class, add registry entry                              |
 | `src/shared/types.d.ts`                | Extend `StreamProvider` union                                 |
 | `src/main/store.ts`                    | Extend `"stream.provider"` schema                             |
-| `src/renderer/pages/settings-page.tsx` | Add `<SelectItem>` and validation branch                      |
 
 Optional, depending on your integration:
 
@@ -96,7 +112,7 @@ Optional, depending on your integration:
 | `stream-provider-listeners.ts` | `registerStreamUpstreamHandler()` for CDN-specific fetch      |
 | `stream-provider-channels.ts`  | Only if you need new IPC channels (rare)                      |
 
-Default active provider is `"allanime"` (`stream-provider-listeners.ts`). Invalid stored values fall back to AllAnime.
+Invalid or disabled stored values fall back to the first enabled provider (`resolveEnabledStreamProvider` in `stream-providers.ts`).
 
 ---
 

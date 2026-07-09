@@ -5,14 +5,16 @@ import { EpisodeCard } from "@/renderer/components/episode-card";
 import { HomeHeroCarousel } from "@/renderer/components/home-hero-carousel";
 import { HorizontalCarousel } from "@/renderer/components/horizontal-carousel";
 import { Badge } from "@/renderer/components/ui/badge";
+import { useResumeHistoryEntry } from "@/renderer/hooks/use-resume-history-entry";
 import { useWelcomeRecentlyUploaded } from "@/renderer/hooks/use-welcome-recent-uploads";
 import { useWelcomeRecentlyWatched } from "@/renderer/hooks/use-welcome-recently-watched";
-import type { Episode, HistoryEntry } from "@/shared/types";
+import type { Episode } from "@/shared/types";
 
 const RECENT_PAGE_SIZE = 12;
 
 export function WelcomePage() {
   const navigate = useNavigate();
+  const { resumeHistoryEntry, disabledProviderDialog } = useResumeHistoryEntry();
   const { recentUploads, recentUploadsLoading } = useWelcomeRecentlyUploaded(RECENT_PAGE_SIZE);
   const { recentlyWatched, recentlyWatchedLoading } = useWelcomeRecentlyWatched();
 
@@ -23,21 +25,9 @@ export function WelcomePage() {
     [navigate]
   );
 
-  const openRecentlyWatched = useCallback(
-    (entry: HistoryEntry) => {
-      navigate("/watch", {
-        state: {
-          episode: entry.episode,
-          providerOverride: entry.provider,
-          ...(entry.currentDurationMs > 0 ? { resumeFromMs: entry.currentDurationMs } : {}),
-        },
-      });
-    },
-    [navigate]
-  );
-
   return (
     <div className="w-full max-w-[1600px] mx-auto flex flex-col gap-6 p-6 md:p-8">
+      {disabledProviderDialog}
       <>
         <div className="-mt-8 -mx-8">
           <HomeHeroCarousel />
@@ -48,7 +38,7 @@ export function WelcomePage() {
             <p className="text-muted-foreground text-sm">Loading…</p>
           ) : recentlyWatched.length > 0 ? (
             <HorizontalCarousel>
-              {recentlyWatched.map((entry: HistoryEntry) => (
+              {recentlyWatched.map((entry) => (
                 <EpisodeCard
                   key={entry.id}
                   layout="carousel"
@@ -61,7 +51,7 @@ export function WelcomePage() {
                     entry.episode.id
                   }
                   onClick={() => {
-                    void openRecentlyWatched(entry);
+                    resumeHistoryEntry(entry);
                   }}
                   totalDurationMs={entry.totalDurationMs}
                   currentDurationMs={entry.currentDurationMs}
