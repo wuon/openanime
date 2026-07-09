@@ -29,7 +29,7 @@ const DEFAULT_STREAM_PROVIDER: StreamProviderName = "allanime";
 registerStreamUpstreamHandler(reanimeStreamUpstreamHandler);
 
 function normalizeProvider(value: unknown): StreamProviderName {
-  if (value === "animepahe" || value === "reanime") return value;
+  if (value === "animepahe" || value === "animeparadise" || value === "reanime") return value;
   return "allanime";
 }
 

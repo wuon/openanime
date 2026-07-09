@@ -4,6 +4,8 @@ import { Video, VideoSkin, videoFeatures } from "@videojs/react/video";
 import "@videojs/react/video/skin.css";
 import React from "react";
 
+import { isHlsPlaylistUrl } from "@/shared/utils/hls-url";
+
 import "./videojs-react-player.css";
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- beta package types currently resolve createPlayer as any in this toolchain.
@@ -22,15 +24,15 @@ interface VideoJsReactPlayerProps {
 
 function isHlsSourceUrl(src?: string): boolean {
   if (!src) return false;
-  if (/\.m3u8(?:$|\?)/i.test(src)) return true;
+  if (isHlsPlaylistUrl(src)) return true;
   try {
     const parsed = new URL(src);
     if (parsed.searchParams.get("transcode") === "1") return false;
     const nested = parsed.searchParams.get("url");
     if (!nested) return false;
-    return /\.m3u8(?:$|\?)/i.test(nested);
+    return isHlsPlaylistUrl(nested);
   } catch {
-    return /m3u8/i.test(src);
+    return false;
   }
 }
 

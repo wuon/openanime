@@ -5,6 +5,7 @@ import { WatchVideoPlayerShell } from "@/renderer/components/player/watch-video-
 import { Button } from "@/renderer/components/ui/button";
 import { useGoBack } from "@/renderer/hooks/use-go-back";
 import type { Episode, HistoryEntry } from "@/shared/types";
+import { isHlsPlaylistUrl } from "@/shared/utils/hls-url";
 
 import { type RichShowDetails, useShowDetails } from "../hooks/use-show-details";
 
@@ -22,7 +23,7 @@ function logPlaybackFailure(event: string, meta?: Record<string, unknown>): void
 
 function shouldUseServerTranscode(streamUrl: string): boolean {
   if (!ENABLE_HLS_SERVER_TRANSCODE) return false;
-  return /\.m3u8(?:$|\?)/i.test(streamUrl);
+  return isHlsPlaylistUrl(streamUrl);
 }
 
 function buildWatchHistoryEntry(

@@ -2,6 +2,7 @@ import { Episode, ShowSearchResult } from "@/shared/types";
 
 import { AllAnimeStreamProvider } from "./allanime/allanime-stream-provider";
 import { AnimePaheStreamProvider } from "./animepahe-stream-provider";
+import { AnimeParadiseStreamProvider } from "./animeparadise-stream-provider";
 import { ReanimeStreamProvider } from "./reanime/reanime-stream-provider";
 
 export interface StreamUrlResult {
@@ -10,7 +11,7 @@ export interface StreamUrlResult {
 }
 
 export type StreamMode = "sub" | "dub";
-export type StreamProviderName = "allanime" | "animepahe" | "reanime";
+export type StreamProviderName = "allanime" | "animepahe" | "animeparadise" | "reanime";
 
 export interface StreamProvider {
   getStreamUrl(
@@ -26,5 +27,6 @@ export interface StreamProvider {
 export const streamProviders: Record<StreamProviderName, StreamProvider> = {
   allanime: new AllAnimeStreamProvider(),
   animepahe: new AnimePaheStreamProvider(),
+  animeparadise: new AnimeParadiseStreamProvider(),
   reanime: new ReanimeStreamProvider(),
 };

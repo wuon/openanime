@@ -26,7 +26,7 @@ export interface TranscodeProgressResult {
   message: string;
 }
 
-export type StreamProviderName = "allanime" | "animepahe" | "reanime";
+export type StreamProviderName = "allanime" | "animepahe" | "animeparadise" | "reanime";
 
 export function exposeStreamProviderContext() {
   contextBridge.exposeInMainWorld("streamProvider", {

@@ -16,6 +16,7 @@ import { URL } from "url";
 
 import { getElectronUserAgent } from "@/main/electron-user-agent";
 import { fetchUpstream, normalizeStreamReferer } from "@/main/stream-proxy-upstream";
+import { isHlsPlaylistUrl } from "@/shared/utils/hls-url";
 
 let server: http.Server | null = null;
 let proxyPort = 0;
@@ -804,7 +805,7 @@ function setCorsHeaders(res: ServerResponse): void {
 }
 
 function isHlsManifestResponse(targetUrl: string, contentType: string | null): boolean {
-  if (/\.m3u8(?:$|\?)/i.test(targetUrl)) return true;
+  if (isHlsPlaylistUrl(targetUrl)) return true;
   const ct = (contentType ?? "").toLowerCase();
   return ct.includes("application/vnd.apple.mpegurl") || ct.includes("application/x-mpegurl");
 }

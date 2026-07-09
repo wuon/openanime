@@ -14,7 +14,7 @@ interface NativeStreamProviderBridge {
 function getNativeStreamProvider(
   provider: StreamProviderName
 ): NativeStreamProviderBridge | null {
-  if (provider === "animepahe" || provider === "reanime") {
+  if (provider === "animepahe" || provider === "animeparadise" || provider === "reanime") {
     return streamProviders[provider] as unknown as NativeStreamProviderBridge;
   }
   return null;
@@ -44,7 +44,7 @@ export async function getEpisodesList(
 ): Promise<string[]> {
   const nativeProvider = getNativeStreamProvider(provider);
   if (nativeProvider) {
-    if (provider === "animepahe" && mode === "dub") {
+    if ((provider === "animepahe" || provider === "animeparadise") && mode === "dub") {
       return [];
     }
     return nativeProvider.getEpisodesList(providerId);

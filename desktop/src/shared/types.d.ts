@@ -10,7 +10,7 @@ interface ThemeContext {
 
 type StreamMode = "sub" | "dub";
 
-type StreamProvider = "allanime" | "animepahe" | "reanime";
+type StreamProvider = "allanime" | "animepahe" | "animeparadise" | "reanime";
 
 interface Show {
   id: string;
