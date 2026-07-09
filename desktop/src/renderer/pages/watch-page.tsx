@@ -195,6 +195,14 @@ export function WatchPage() {
     void syncHistoryProgress();
   }, [syncHistoryProgress]);
 
+  const handleVideoLoadedMetadata = useCallback<React.ReactEventHandler<HTMLVideoElement>>(
+    (e) => {
+      applyResumeIfNeeded(e.currentTarget);
+      void syncHistoryProgress();
+    },
+    [applyResumeIfNeeded, syncHistoryProgress]
+  );
+
   const loadStream = useCallback(
     async (ep: string, opts?: { resumeFrom?: number | null }) => {
       if (!episode?.providerId || !ep) return;
@@ -272,8 +280,9 @@ export function WatchPage() {
           });
         }
 
-        const transcodeParam = shouldTranscode ? "&transcode=1" : "";
-        const urlWithProxy = `${base}/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}${transcodeParam}`;
+        const urlWithProxy = shouldTranscode
+          ? `${base}/transcode/playlist.m3u8?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`
+          : `${base}/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
         if (activeLoadTokenRef.current !== loadToken) return;
         setPlayUrl(urlWithProxy);
         setStreamRevision((r) => {
@@ -512,9 +521,7 @@ export function WatchPage() {
       onBack={goBack}
       onEpisodeSelect={onEpisodeSelect}
       onRetryStream={retryStream}
-      onLoadedMetadata={(e) => {
-        applyResumeIfNeeded(e.currentTarget);
-      }}
+      onLoadedMetadata={handleVideoLoadedMetadata}
       onPause={handleVideoPause}
       onEnded={handleVideoEnded}
       onPlaying={handleVideoPlaying}
