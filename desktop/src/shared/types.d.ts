@@ -73,6 +73,12 @@ interface Episode {
 interface StreamUrlResult {
   url: string;
   referer: string;
+  subtitles?: Array<{
+    url: string;
+    language: string;
+    format: string;
+    default?: boolean;
+  }>;
 }
 
 interface TranscodeProgressResult {
@@ -343,6 +349,7 @@ interface StreamProviderContext {
   ) => Promise<StreamUrlResult>;
   getStreamProxyBaseUrl: () => Promise<string>;
   prepareTranscodedStream: (targetUrl: string, referer: string | null) => Promise<boolean>;
+  cancelTranscodedStream: (targetUrl: string) => Promise<boolean>;
   getTranscodeProgress: (targetUrl: string) => Promise<TranscodeProgressResult>;
   getShowDetails: (providerId: string, providerName?: StreamProvider) => Promise<ShowDetails>;
   getRecentUploads: (page: number, limit?: number) => Promise<Episode[]>;

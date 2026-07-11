@@ -3,6 +3,7 @@ export const STREAM_PROVIDER_EPISODES_CHANNEL = "stream-provider:episodes";
 export const STREAM_PROVIDER_STREAM_URL_CHANNEL = "stream-provider:stream-url";
 export const STREAM_PROVIDER_STREAM_PROXY_BASE_CHANNEL = "stream-provider:stream-proxy-base";
 export const STREAM_PROVIDER_PREPARE_TRANSCODE_CHANNEL = "stream-provider:transcode:prepare";
+export const STREAM_PROVIDER_CANCEL_TRANSCODE_CHANNEL = "stream-provider:transcode:cancel";
 export const STREAM_PROVIDER_TRANSCODE_PROGRESS_CHANNEL = "stream-provider:transcode:progress";
 export const STREAM_PROVIDER_SHOW_DETAILS_CHANNEL = "stream-provider:show-details";
 export const STREAM_PROVIDER_RECENT_UPLOADS_CHANNEL = "stream-provider:recent-uploads";

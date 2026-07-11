@@ -8,6 +8,7 @@ import {
   STREAM_PROVIDER_ACTIVE_SET_CHANNEL,
   STREAM_PROVIDER_EPISODES_CHANNEL,
   STREAM_PROVIDER_PREPARE_TRANSCODE_CHANNEL,
+  STREAM_PROVIDER_CANCEL_TRANSCODE_CHANNEL,
   STREAM_PROVIDER_RECENT_UPLOADS_CHANNEL,
   STREAM_PROVIDER_SEARCH_CHANNEL,
   STREAM_PROVIDER_SHOW_DETAILS_CHANNEL,
@@ -19,6 +20,12 @@ import {
 export interface StreamUrlResult {
   url: string;
   referer: string;
+  subtitles?: Array<{
+    url: string;
+    language: string;
+    format: string;
+    default?: boolean;
+  }>;
 }
 
 export interface TranscodeProgressResult {
@@ -69,6 +76,11 @@ export function exposeStreamProviderContext() {
         STREAM_PROVIDER_PREPARE_TRANSCODE_CHANNEL as string,
         targetUrl,
         referer
+      ) as Promise<boolean>,
+    cancelTranscodedStream: (targetUrl: string) =>
+      ipcRenderer.invoke(
+        STREAM_PROVIDER_CANCEL_TRANSCODE_CHANNEL as string,
+        targetUrl
       ) as Promise<boolean>,
     getTranscodeProgress: (targetUrl: string) =>
       ipcRenderer.invoke(

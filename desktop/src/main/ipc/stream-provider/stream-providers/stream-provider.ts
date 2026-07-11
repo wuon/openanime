@@ -8,9 +8,17 @@ import { ReanimeStreamProvider } from "./reanime/reanime-stream-provider";
 
 export type { StreamProviderName };
 
+export interface StreamSubtitleTrack {
+  url: string;
+  language: string;
+  format: string;
+  default?: boolean;
+}
+
 export interface StreamUrlResult {
   url: string;
   referer: string;
+  subtitles?: StreamSubtitleTrack[];
 }
 
 export type StreamMode = "sub" | "dub";

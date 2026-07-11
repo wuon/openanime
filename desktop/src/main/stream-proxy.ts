@@ -4,7 +4,10 @@
  *
  * Routes:
  *   GET /stream?url=<targetUrl>&referer=<referer>
+ *   GET /stream/playlist.m3u8?url=<targetUrl>&referer=<referer>
+ *   GET /stream/segment.ts?url=<targetUrl>&referer=<referer>
  *     Pass-through proxy. Rewrites HLS manifests to keep segments going through us.
+ *     Playlist/segment path suffixes help ffmpeg accept proxied HLS URLs.
  *
  *   GET /transcode/playlist.m3u8?url=<targetUrl>&referer=<referer>
  *     Returns a synthesized VOD HLS playlist immediately. Duration is probed up
@@ -30,6 +33,7 @@ import { URL } from "url";
 
 import { getElectronUserAgent } from "@/main/electron-user-agent";
 import { fetchUpstream, normalizeStreamReferer } from "@/main/stream-proxy-upstream";
+import { convertAssToWebVtt, isAssSubtitleUrl } from "@/main/utils/ass-to-webvtt";
 import { isHlsPlaylistUrl } from "@/shared/utils/hls-url";
 
 let server: http.Server | null = null;
@@ -118,11 +122,13 @@ function getInputPermissiveHlsArgs(): string[] {
   const args = [
     "-protocol_whitelist",
     "file,http,https,tcp,tls,crypto,data",
+    // HLS demuxer private option; accepted before -i when input probes as HLS.
     "-allowed_extensions",
     "ALL",
   ];
   if (IS_WINDOWS) {
-    // Allow HLS segments fetched through our local proxy path (/stream), which has no extension.
+    // Newer Windows ffmpeg builds enforce segment extension allow-lists. The bundled
+    // macOS 4.4 binary does not understand these flags and will refuse to start.
     args.push("-extension_picky", "0");
     args.push("-allowed_segment_extensions", "ALL");
   }
@@ -152,8 +158,8 @@ export function getStreamProxyBaseUrl(): string {
 
 /**
  * Public IPC entry point: prepare the HLS transcode for a target URL.
- * Probes duration up front and kicks off the sequential transcode job.
- * Returns when the playlist is ready to be requested (typically <2s).
+ * Probes duration, starts the sequential job, and waits for the first segment
+ * so the player does not open onto a black screen.
  */
 export async function prepareTranscodedStream(
   inputUrl: string,
@@ -166,7 +172,41 @@ export async function prepareTranscodedStream(
   if (!resolvedFfmpegPath) {
     throw new Error("ffmpeg binary unavailable");
   }
-  await ensureHlsSession(inputUrl, targetUrl, referer);
+  const session = await ensureHlsSession(inputUrl, targetUrl, referer);
+  await waitForFirstTranscodeSegment(session);
+}
+
+/** How long prepare may block waiting for seg-0 before handing off to the player. */
+const FIRST_SEGMENT_WAIT_MS = 90_000;
+
+async function waitForFirstTranscodeSegment(session: HlsSession): Promise<void> {
+  if (session.segmentsAvailable.has(0)) {
+    updateSessionProgress(session, "Ready to play");
+    return;
+  }
+
+  transcodeProgress.set(session.key, {
+    state: "running",
+    progressPercent: session.segmentsAvailable.size > 0 ? 1 : 0,
+    message: "Preparing first video segment...",
+  });
+
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), FIRST_SEGMENT_WAIT_MS);
+  try {
+    await ensureSegmentReady(session, 0, ac.signal);
+    updateSessionProgress(session, "Ready to play");
+  } catch (error: unknown) {
+    if (IS_DEV) {
+      console.warn("[stream-proxy] first segment wait ended early", {
+        key: session.key,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+    // Still return — the player can keep waiting on segment requests.
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function getTranscodeProgress(targetUrl: string): TranscodeProgressSnapshot {
@@ -179,8 +219,43 @@ export function getTranscodeProgress(targetUrl: string): TranscodeProgressSnapsh
 /** Stop all background ffmpeg processes (e.g. on app quit). */
 export function shutdownTranscodeJobs(): void {
   for (const session of hlsSessions.values()) {
-    stopSequentialJob(session);
+    cancelHlsSession(session);
   }
+}
+
+/**
+ * Stop the background transcoder for a stream (e.g. user left the watch page).
+ * Without this, ffmpeg keeps pulling CDN segments after playback ends.
+ */
+export function cancelTranscodedStream(targetUrl: string): void {
+  const key = getTranscodeCacheKey(targetUrl);
+  const session = hlsSessions.get(key);
+  if (!session) {
+    transcodeProgress.set(key, {
+      state: "idle",
+      progressPercent: null,
+      message: "Cancelled",
+    });
+    return;
+  }
+  cancelHlsSession(session);
+  if (IS_DEV) {
+    console.info("[stream-proxy] transcode cancelled", { key });
+  }
+}
+
+function cancelHlsSession(session: HlsSession): void {
+  stopSequentialJob(session);
+  for (const [segIdx, list] of session.awaiters) {
+    session.awaiters.delete(segIdx);
+    const err = new Error("Transcode cancelled");
+    for (const w of list) w.reject(err);
+  }
+  transcodeProgress.set(session.key, {
+    state: "idle",
+    progressPercent: null,
+    message: "Cancelled",
+  });
 }
 
 function handleStreamRequest(req: IncomingMessage, res: ServerResponse): void {
@@ -200,7 +275,7 @@ function handleStreamRequest(req: IncomingMessage, res: ServerResponse): void {
 
   const parsed = new URL(req.url ?? "", `http://127.0.0.1`);
 
-  if (parsed.pathname === "/stream") {
+  if (parsed.pathname === "/stream" || parsed.pathname.startsWith("/stream/")) {
     handleStreamPassthrough(req, res, parsed);
     return;
   }
@@ -272,7 +347,7 @@ function handleStreamPassthrough(req: IncomingMessage, res: ServerResponse, pars
       if (IS_DEV && status >= 400) {
         console.warn("[stream-proxy] upstream non-OK", {
           status,
-          targetUrl,
+          targetUrl: targetUrl.slice(0, 96),
           referer: referer ?? null,
         });
       }
@@ -284,8 +359,24 @@ function handleStreamPassthrough(req: IncomingMessage, res: ServerResponse, pars
         }
       });
 
-      if (isHlsManifestResponse(targetUrl, fetchRes.headers.get("content-type"))) {
+      // Only rewrite successful playlist responses. Passing 5xx error bodies through
+      // the HLS rewriter confuses ffmpeg with a "5XX Server Error" on a fake playlist.
+      if (
+        status < 400 &&
+        isHlsManifestResponse(targetUrl, fetchRes.headers.get("content-type"))
+      ) {
         const manifestBody = await fetchRes.text();
+        if (!manifestBody.trimStart().startsWith("#EXTM3U")) {
+          if (IS_DEV) {
+            console.warn("[stream-proxy] playlist response missing #EXTM3U", {
+              targetUrl: targetUrl.slice(0, 96),
+              preview: manifestBody.slice(0, 120).replace(/\s+/g, " "),
+            });
+          }
+          res.writeHead(502);
+          res.end("Upstream playlist was not valid HLS");
+          return;
+        }
         const rewrittenBody = rewriteHlsManifest(
           manifestBody,
           targetUrl,
@@ -295,6 +386,17 @@ function handleStreamPassthrough(req: IncomingMessage, res: ServerResponse, pars
         resHeaders["content-type"] = "application/vnd.apple.mpegurl; charset=utf-8";
         res.writeHead(status === 206 ? 206 : status, resHeaders);
         res.end(rewrittenBody);
+        return;
+      }
+
+      // Flixcloud softsubs are ASS; browsers need WebVTT for native <track> support.
+      if (status < 400 && isAssSubtitleUrl(targetUrl)) {
+        const assBody = await fetchRes.text();
+        const vttBody = convertAssToWebVtt(assBody);
+        resHeaders["content-type"] = "text/vtt; charset=utf-8";
+        delete resHeaders["content-encoding"];
+        res.writeHead(200, resHeaders);
+        res.end(vttBody);
         return;
       }
 
@@ -320,6 +422,12 @@ function handleStreamPassthrough(req: IncomingMessage, res: ServerResponse, pars
     })
     .catch((err: unknown) => {
       if (ac.signal.aborted || isBenignStreamError(err)) return;
+      if (IS_DEV) {
+        console.warn("[stream-proxy] upstream fetch threw", {
+          targetUrl: targetUrl.slice(0, 96),
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
       if (!res.headersSent) {
         res.writeHead(502);
         res.end(String(err instanceof Error ? err.message : "Proxy error"));
@@ -427,7 +535,8 @@ async function handleSegmentRequest(
 }
 
 function buildLocalProxyInputUrl(targetUrl: string, referer: string | null): string {
-  return `${getStreamProxyBaseUrl()}/stream?url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(referer ?? "")}`;
+  // Use a .m3u8 path so ffmpeg's HLS demuxer accepts the proxied playlist.
+  return `${getStreamProxyBaseUrl()}/stream/playlist.m3u8?url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(referer ?? "")}`;
 }
 
 function buildVodPlaylist(session: HlsSession, targetUrl: string, referer: string | null): string {
@@ -488,7 +597,18 @@ async function ensureHlsSession(
     const segmentDir = path.join(transcodeCacheDir, key);
     await mkdir(segmentDir, { recursive: true });
 
-    const duration = await probeDurationSeconds(inputUrl).catch((err: unknown) => {
+    const duration = await (async () => {
+      const fromPlaylist = await probeDurationFromHlsPlaylist(inputUrl);
+      if (fromPlaylist != null && fromPlaylist > 0) {
+        if (IS_DEV) {
+          console.info("[stream-proxy] duration from playlist EXTINF", {
+            durationSeconds: fromPlaylist,
+          });
+        }
+        return fromPlaylist;
+      }
+      return probeDurationSeconds(inputUrl);
+    })().catch((err: unknown) => {
       transcodeProgress.set(key, {
         state: "error",
         progressPercent: null,
@@ -658,6 +778,53 @@ function probeDurationSeconds(inputUrl: string): Promise<number> {
       );
     });
   });
+}
+
+/** Sum #EXTINF from an HLS media playlist (follow master → first video variant). */
+async function probeDurationFromHlsPlaylist(playlistUrl: string): Promise<number | null> {
+  try {
+    const masterRes = await fetch(playlistUrl);
+    if (!masterRes.ok) return null;
+    let text = await masterRes.text();
+    if (!text.trimStart().startsWith("#EXTM3U")) return null;
+
+    if (text.includes("#EXT-X-STREAM-INF")) {
+      const mediaUrl = pickFirstVariantPlaylistUrl(text, playlistUrl);
+      if (!mediaUrl) return null;
+      const mediaRes = await fetch(mediaUrl);
+      if (!mediaRes.ok) return null;
+      text = await mediaRes.text();
+      if (!text.trimStart().startsWith("#EXTM3U")) return null;
+    }
+
+    let total = 0;
+    let count = 0;
+    for (const line of text.split(/\r?\n/)) {
+      const match = /^#EXTINF:([0-9]*\.?[0-9]+)/.exec(line);
+      if (!match) continue;
+      const seconds = Number(match[1]);
+      if (!Number.isFinite(seconds) || seconds < 0) continue;
+      total += seconds;
+      count += 1;
+    }
+    if (count === 0 || !(total > 0)) return null;
+    return total;
+  } catch {
+    return null;
+  }
+}
+
+function pickFirstVariantPlaylistUrl(master: string, baseUrl: string): string | null {
+  const lines = master.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (!line.startsWith("#EXT-X-STREAM-INF")) continue;
+    const next = (lines[i + 1] ?? "").trim();
+    if (next && !next.startsWith("#")) {
+      return toAbsoluteUrl(next, baseUrl);
+    }
+  }
+  return null;
 }
 
 function startSequentialJob(session: HlsSession, startSegment: number): HlsSequentialJob {
@@ -1259,7 +1426,10 @@ function rewriteHlsManifest(
     const trimmed = rawUri.trim();
     if (!trimmed || trimmed.startsWith("data:") || trimmed.startsWith("blob:")) return rawUri;
     const absolute = toAbsoluteUrl(trimmed, manifestUrl);
-    return `${proxyBaseUrl}/stream?url=${encodeURIComponent(absolute)}&referer=${encodeURIComponent(effectiveReferer)}`;
+    // Give proxied playlists/segments real extensions so ffmpeg (and picky HLS
+    // demuxers) don't reject extensionless `/stream` URLs.
+    const proxyPath = isHlsPlaylistUrl(absolute) ? "/stream/playlist.m3u8" : "/stream/segment.ts";
+    return `${proxyBaseUrl}${proxyPath}?url=${encodeURIComponent(absolute)}&referer=${encodeURIComponent(effectiveReferer)}`;
   };
 
   return manifest

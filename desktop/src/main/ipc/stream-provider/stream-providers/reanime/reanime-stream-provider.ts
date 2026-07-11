@@ -1,13 +1,54 @@
 import { getElectronUserAgent } from "@/main/electron-user-agent";
 import { Episode, ShowSearchResult } from "@/shared/types";
 
-import { StreamMode, StreamProvider, StreamUrlResult } from "../stream-provider";
+import { StreamMode, StreamProvider, StreamSubtitleTrack, StreamUrlResult } from "../stream-provider";
 import { decryptFlixcloudLink, FLIXCLOUD_REFERER } from "./flixcloud-decrypt";
+import { registerFlixcloudPlaylistKey } from "./flixcloud-playlist-crypto";
+import { prefetchReanimePlayback } from "./reanime-stream-upstream";
 
 const BASE = process.env.REANIME_BASE || "https://reanime.to";
+/** Reanime moved public REST routes under /api/v1 (old /api/* returns 404). */
+const API_BASE = process.env.REANIME_API_BASE || `${BASE}/api/v1`;
 const SEARCH_LIMIT = 36;
 const SERVER_ORDER: Record<string, number> = { "HD-2": 0, "HD-1": 1 };
 const IS_DEV = process.env.NODE_ENV !== "production";
+
+function normalizeFlixcloudSubtitles(raw: unknown[]): StreamSubtitleTrack[] {
+  const tracks: StreamSubtitleTrack[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const url = typeof record.url === "string" ? record.url.trim() : "";
+    if (!url) continue;
+    const language =
+      typeof record.language === "string" && record.language.trim()
+        ? record.language.trim()
+        : "Unknown";
+    const format =
+      typeof record.format === "string" && record.format.trim()
+        ? record.format.trim().toLowerCase()
+        : guessSubtitleFormat(url);
+    tracks.push({
+      url,
+      language,
+      format,
+      default: record.default === true,
+    });
+  }
+  return tracks;
+}
+
+function guessSubtitleFormat(url: string): string {
+  try {
+    const pathname = new URL(url).pathname.toLowerCase();
+    if (pathname.endsWith(".ass") || pathname.endsWith(".ssa")) return "ass";
+    if (pathname.endsWith(".vtt")) return "vtt";
+    if (pathname.endsWith(".srt")) return "srt";
+  } catch {
+    // ignore
+  }
+  return "unknown";
+}
 
 interface ReanimeTitle {
   english?: string;
@@ -37,6 +78,7 @@ interface ReanimeAnime {
   dubbed?: number;
   average_score?: number;
   anilist?: number | string;
+  anilist_id?: number | string;
 }
 
 interface ReanimeLatestEpisode {
@@ -55,6 +97,7 @@ interface ReanimeLatestAiredResponse {
 
 interface ReanimeSearchResponse {
   results?: ReanimeAnime[];
+  data?: ReanimeAnime[];
 }
 
 interface ReanimeEpisodeItem {
@@ -92,27 +135,17 @@ function filterServersByMode(servers: ReanimeStreamServer[], mode: StreamMode): 
   );
 }
 
-function mergeStreamServers(
-  primary: ReanimeStreamServer[],
-  secondary: ReanimeStreamServer[]
-): ReanimeStreamServer[] {
-  const seen = new Set(primary.map((server) => server.$id).filter(Boolean));
-  const merged = [...primary];
-  for (const server of secondary) {
-    if (server.$id && seen.has(server.$id)) continue;
-    merged.push(server);
-  }
-  return merged;
-}
-
 function extractAnilistId(anime: ReanimeAnime): string | null {
   if (anime.anilist != null) {
     return String(anime.anilist);
   }
+  if (anime.anilist_id != null) {
+    return String(anime.anilist_id);
+  }
   const cover = anime.cover_image;
   const coverUrl = cover?.large ?? cover?.extra_large ?? cover?.medium;
   if (!coverUrl) return null;
-  const match = coverUrl.match(/\/bx(\d+)-/i);
+  const match = coverUrl.match(/\/b(?:x)?(\d+)-/i);
   return match?.[1] ?? null;
 }
 
@@ -193,31 +226,62 @@ export class ReanimeStreamProvider implements StreamProvider {
     console.info(`[reanime-provider] ${event}${suffix}`);
   }
 
-  private async reanimeGet<T>(path: string, params?: Record<string, string>): Promise<T> {
+  private async reanimeGet<T>(
+    path: string,
+    params?: Record<string, string>,
+    options?: { apiRoot?: "v1" | "legacy" }
+  ): Promise<T> {
     const startedAt = Date.now();
-    const url = new URL(`${BASE}${path}`);
+    const apiRoot = options?.apiRoot ?? "v1";
+    // Most catalog routes moved under /api/v1. Stream server lookup still uses legacy /api/flix.
+    const normalized = path.replace(/^\/api(?:\/v1)?/, "") || "/";
+    const root = apiRoot === "legacy" ? `${BASE}/api` : API_BASE;
+    const url = new URL(`${root}${normalized.startsWith("/") ? normalized : `/${normalized}`}`);
     if (params) {
       for (const [key, value] of Object.entries(params)) {
         url.searchParams.set(key, value);
       }
     }
 
-    this.log("api:start", { path, params: params ?? null });
+    this.log("api:start", { path: url.pathname, params: params ?? null });
 
     const response = await fetch(url.toString(), {
       headers: {
-        Accept: "application/json",
+        Accept: "application/json, */*",
+        Referer: `${BASE}/`,
+        Origin: BASE,
         "User-Agent": getElectronUserAgent(),
       },
     });
     if (!response.ok) {
-      this.log("api:failed", { path, status: response.status, ms: Date.now() - startedAt });
-      throw new Error(`Reanime request failed (${response.status}): ${path}`);
+      this.log("api:failed", { path: url.pathname, status: response.status, ms: Date.now() - startedAt });
+      throw new Error(`Reanime request failed (${response.status}): ${url.pathname}`);
     }
 
     const json = (await response.json()) as T;
-    this.log("api:done", { path, status: response.status, ms: Date.now() - startedAt });
+    this.log("api:done", { path: url.pathname, status: response.status, ms: Date.now() - startedAt });
     return json;
+  }
+
+  private async resolveAnilistId(
+    providerId: string,
+    anilistIdHint?: string | null
+  ): Promise<string | null> {
+    if (anilistIdHint && /^\d+$/.test(anilistIdHint)) {
+      return anilistIdHint;
+    }
+
+    try {
+      const watch = await this.reanimeGet<ReanimeWatchResponse>(
+        `/watch/${encodeURIComponent(providerId)}`,
+        { ep: "1" }
+      );
+      return watch.anime ? extractAnilistId(watch.anime) : null;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      this.log("anilist:resolve-failed", { providerId, error: message });
+      return null;
+    }
   }
 
   private async fetchLatestAired(
@@ -233,7 +297,7 @@ export class ReanimeStreamProvider implements StreamProvider {
       params.cursor = cursor;
     }
 
-    const json = await this.reanimeGet<ReanimeLatestAiredResponse>("/api/home/latest-aired", params);
+    const json = await this.reanimeGet<ReanimeLatestAiredResponse>("/home/latest-aired", params);
     const nextCursor = typeof json.next_cursor === "string" ? json.next_cursor : null;
     return {
       items: Array.isArray(json.data) ? json.data : [],
@@ -243,42 +307,31 @@ export class ReanimeStreamProvider implements StreamProvider {
 
   private async getEpisodeServers(
     providerId: string,
-    episode: number
+    episode: number,
+    anilistIdHint?: string | null
   ): Promise<{ sub: ReanimeStreamServer[]; dub: ReanimeStreamServer[] }> {
     const startedAt = Date.now();
-    this.log("servers:start", { providerId, episode });
+    this.log("servers:start", { providerId, episode, anilistIdHint: anilistIdHint ?? null });
 
-    const watch = await this.reanimeGet<ReanimeWatchResponse>(
-      `/api/watch/${encodeURIComponent(providerId)}/${episode}`
-    );
-    let links = Array.isArray(watch.episode_links) ? watch.episode_links : [];
-    this.log("servers:watch", {
-      providerId,
-      episode,
-      watchLinks: links.length,
-    });
-
-    const anilistId = watch.anime ? extractAnilistId(watch.anime) : null;
-    if (anilistId) {
-      try {
-        const flix = await this.reanimeGet<ReanimeFlixResponse>(
-          `/api/flix/${encodeURIComponent(anilistId)}/${episode}`
-        );
-        if (flix.success && Array.isArray(flix.servers)) {
-          links = mergeStreamServers(links, flix.servers);
-          this.log("servers:flix", {
-            anilistId,
-            flixServers: flix.servers.length,
-            mergedTotal: links.length,
-          });
-        }
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "unknown error";
-        this.log("servers:flix-failed", { anilistId, error: message });
-      }
-    } else {
+    const anilistId = await this.resolveAnilistId(providerId, anilistIdHint);
+    if (!anilistId) {
       this.log("servers:no-anilist-id", { providerId, episode });
+      throw new Error(`Missing AniList id for Reanime stream lookup: ${providerId}`);
     }
+
+    // Legacy /api/flix still serves embed links; /api/v1/flix returns 401.
+    const flix = await this.reanimeGet<ReanimeFlixResponse>(
+      `/flix/${encodeURIComponent(anilistId)}/${episode}`,
+      undefined,
+      { apiRoot: "legacy" }
+    );
+
+    const links =
+      flix.success && Array.isArray(flix.servers) ? flix.servers : [];
+    this.log("servers:flix", {
+      anilistId,
+      flixServers: links.length,
+    });
 
     const sub = filterServersByMode(links, "sub");
     const dub = filterServersByMode(links, "dub");
@@ -293,13 +346,13 @@ export class ReanimeStreamProvider implements StreamProvider {
   }
 
   async getStreamUrl(
-    _id: string | null,
+    id: string | null,
     providerId: string | null,
     episode: string,
     mode: StreamMode = "sub"
   ): Promise<StreamUrlResult> {
     const startedAt = Date.now();
-    this.log("stream:start", { providerId, episode, mode });
+    this.log("stream:start", { id, providerId, episode, mode });
 
     if (!providerId) {
       throw new Error("Missing providerId for Reanime stream lookup");
@@ -310,7 +363,8 @@ export class ReanimeStreamProvider implements StreamProvider {
       throw new Error(`Invalid episode number for Reanime: ${episode}`);
     }
 
-    const servers = await this.getEpisodeServers(providerId, episodeNumber);
+    const anilistIdHint = id && /^\d+$/.test(id) ? id : null;
+    const servers = await this.getEpisodeServers(providerId, episodeNumber, anilistIdHint);
     const candidates = mode === "dub" ? servers.dub : servers.sub;
     if (candidates.length === 0) {
       throw new Error(`No playable Reanime ${mode} sources found for episode ${episode}`);
@@ -338,6 +392,9 @@ export class ReanimeStreamProvider implements StreamProvider {
 
       try {
         const decrypted = await decryptFlixcloudLink(dataLink, { referer: `${BASE}/` });
+        registerFlixcloudPlaylistKey(decrypted.url, decrypted.playlistKey);
+        // Warm playlists + segment CDN while the UI prepares transcode.
+        void prefetchReanimePlayback(decrypted.url, FLIXCLOUD_REFERER);
         this.log("stream:done", {
           providerId,
           episode,
@@ -351,6 +408,7 @@ export class ReanimeStreamProvider implements StreamProvider {
           url: decrypted.url,
           // fetch1.flixcloud.cc rejects embed-page referers (cross-subdomain); use site root.
           referer: FLIXCLOUD_REFERER,
+          subtitles: normalizeFlixcloudSubtitles(decrypted.subtitles),
         };
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "unknown error";
@@ -441,13 +499,19 @@ export class ReanimeStreamProvider implements StreamProvider {
       return results;
     }
 
-    const json = await this.reanimeGet<ReanimeSearchResponse>("/api/search", {
+    const json = await this.reanimeGet<ReanimeSearchResponse | ReanimeAnime[]>("/search", {
       q: trimmed,
       limit: String(SEARCH_LIMIT),
       offset: "0",
     });
 
-    const rows = Array.isArray(json.results) ? json.results : [];
+    const rows = Array.isArray(json)
+      ? json
+      : Array.isArray(json.results)
+        ? json.results
+        : Array.isArray(json.data)
+          ? json.data
+          : [];
     const results = rows
       .filter((item) => typeof item.anime_id === "string" && item.anime_id.length > 0)
       .map((item) => mapAnimeToShowSearchResult(item));
@@ -465,11 +529,12 @@ export class ReanimeStreamProvider implements StreamProvider {
     const startedAt = Date.now();
     this.log("episodes:start", { providerId });
 
-    const data = await this.reanimeGet<ReanimeEpisodeItem[] | { data?: ReanimeEpisodeItem[] }>(
-      `/api/episodes/${encodeURIComponent(providerId)}`
+    const data = await this.reanimeGet<{ data?: ReanimeEpisodeItem[] }>(
+      `/anime/${encodeURIComponent(providerId)}/episodes`,
+      { limit: "2000" }
     );
 
-    const items = Array.isArray(data) ? data : Array.isArray(data.data) ? data.data : [];
+    const items = Array.isArray(data.data) ? data.data : [];
     const numbers = items
       .map((item) => item.episode_number)
       .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
@@ -497,7 +562,8 @@ export class ReanimeStreamProvider implements StreamProvider {
     this.log("details:start", { providerId });
 
     const json = await this.reanimeGet<ReanimeWatchResponse>(
-      `/api/watch/${encodeURIComponent(providerId)}/1`
+      `/watch/${encodeURIComponent(providerId)}`,
+      { ep: "1" }
     );
     const anime = json.anime;
     if (!anime?.anime_id) {

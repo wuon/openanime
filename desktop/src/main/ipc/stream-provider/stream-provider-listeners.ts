@@ -8,6 +8,7 @@ import {
   getStreamProxyBaseUrl,
   getTranscodeProgress,
   prepareTranscodedStream,
+  cancelTranscodedStream,
 } from "@/main/stream-proxy";
 
 import {
@@ -15,6 +16,7 @@ import {
   STREAM_PROVIDER_ACTIVE_SET_CHANNEL,
   STREAM_PROVIDER_EPISODES_CHANNEL,
   STREAM_PROVIDER_PREPARE_TRANSCODE_CHANNEL,
+  STREAM_PROVIDER_CANCEL_TRANSCODE_CHANNEL,
   STREAM_PROVIDER_RECENT_UPLOADS_CHANNEL,
   STREAM_PROVIDER_SEARCH_CHANNEL,
   STREAM_PROVIDER_SHOW_DETAILS_CHANNEL,
@@ -75,11 +77,15 @@ export function addStreamProviderListeners() {
   ipcMain.handle(
     STREAM_PROVIDER_PREPARE_TRANSCODE_CHANNEL,
     async (_event, targetUrl: string, referer: string | null) => {
-      const localProxyInputUrl = `${getStreamProxyBaseUrl()}/stream?url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(referer ?? "")}`;
+      const localProxyInputUrl = `${getStreamProxyBaseUrl()}/stream/playlist.m3u8?url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(referer ?? "")}`;
       await prepareTranscodedStream(localProxyInputUrl, targetUrl, referer);
       return true;
     }
   );
+  ipcMain.handle(STREAM_PROVIDER_CANCEL_TRANSCODE_CHANNEL, (_event, targetUrl: string) => {
+    cancelTranscodedStream(targetUrl);
+    return true;
+  });
   ipcMain.handle(STREAM_PROVIDER_TRANSCODE_PROGRESS_CHANNEL, (_event, targetUrl: string) => {
     return getTranscodeProgress(targetUrl);
   });

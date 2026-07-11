@@ -2,7 +2,8 @@
 export function isHlsPlaylistUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return /(?:^|\/)m3u8(?:[?#]|$)/i.test(parsed.pathname);
+    // Match ".../m3u8" and common playlist filenames like "master.m3u8" / "index.m3u8".
+    return /(?:^|\/|\.)m3u8$/i.test(parsed.pathname);
   } catch {
     return /(?:^|[/.])m3u8(?:[?#]|$)/i.test(url);
   }

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation } from "react-router-dom";
 
 import { WatchVideoPlayerShell } from "@/renderer/components/player/watch-video-player-shell";
+import type { PlayerSubtitleTrack } from "@/renderer/components/player/videojs-react-player";
 import { DisabledStreamProviderDialog } from "@/renderer/components/disabled-stream-provider-dialog";
 import { Button } from "@/renderer/components/ui/button";
 import { useGoBack } from "@/renderer/hooks/use-go-back";
@@ -26,6 +27,37 @@ function logPlaybackFailure(event: string, meta?: Record<string, unknown>): void
 function shouldUseServerTranscode(streamUrl: string): boolean {
   if (!ENABLE_HLS_SERVER_TRANSCODE) return false;
   return isHlsPlaylistUrl(streamUrl);
+}
+
+function subtitleLangCode(label: string): string {
+  const paren = /\(([A-Za-z]{2,3})\)\s*$/.exec(label);
+  if (paren?.[1]) return paren[1].toLowerCase();
+  if (/english/i.test(label)) return "en";
+  if (/arabic/i.test(label)) return "ar";
+  if (/french/i.test(label)) return "fr";
+  if (/german/i.test(label)) return "de";
+  if (/italian/i.test(label)) return "it";
+  if (/spanish|castilian/i.test(label)) return "es";
+  if (/portuguese/i.test(label)) return "pt";
+  if (/russian/i.test(label)) return "ru";
+  if (/polish/i.test(label)) return "pl";
+  return "und";
+}
+
+function proxySubtitleTracks(
+  base: string,
+  referer: string,
+  subtitles:
+    | Array<{ url: string; language: string; format: string; default?: boolean }>
+    | undefined
+): PlayerSubtitleTrack[] {
+  if (!subtitles?.length) return [];
+  return subtitles.map((track) => ({
+    src: `${base}/stream?url=${encodeURIComponent(track.url)}&referer=${encodeURIComponent(referer)}`,
+    label: track.language,
+    srclang: subtitleLangCode(track.language),
+    default: track.default === true,
+  }));
 }
 
 function buildWatchHistoryEntry(
@@ -88,6 +120,7 @@ export function WatchPage() {
   const [playUrl, setPlayUrl] = useState<string>("");
   /** Bumps when a new stream URL is ready so the <video> remounts (retry after errors). */
   const [streamRevision, setStreamRevision] = useState(0);
+  const [subtitleTracks, setSubtitleTracks] = useState<PlayerSubtitleTrack[]>([]);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [loadingEpisode, setLoadingEpisode] = useState(false);
   const [transcodeProgress, setTranscodeProgress] = useState<{
@@ -126,6 +159,8 @@ export function WatchPage() {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastHistoryEntryRef = useRef<HistoryEntry | null>(null);
+  /** Upstream stream URL currently being transcoded (for cancel-on-exit). */
+  const activeTranscodeUrlRef = useRef<string | null>(null);
   /** Seconds to seek to after the next successful load (set before reload). */
   const resumeAfterLoadRef = useRef<number | null>(null);
   /** Last known position when playback failed (for manual retry after overlay). */
@@ -264,8 +299,14 @@ export function WatchPage() {
       setTranscodeProgress(null);
       setError(null);
       setPlaybackError(null);
+      setSubtitleTracks([]);
+      const previousTranscodeUrl = activeTranscodeUrlRef.current;
+      if (previousTranscodeUrl) {
+        activeTranscodeUrlRef.current = null;
+        void window.streamProvider.cancelTranscodedStream(previousTranscodeUrl);
+      }
       try {
-        const { url, referer } = await window.streamProvider.getStreamUrl(
+        const { url, referer, subtitles } = await window.streamProvider.getStreamUrl(
           episode.id,
           episode.providerId,
           ep,
@@ -275,6 +316,7 @@ export function WatchPage() {
         historyProviderRef.current =
           streamProviderOverride ?? (await window.streamProvider.getActiveProvider());
         const base = await window.streamProvider.getStreamProxyBaseUrl();
+        setSubtitleTracks(proxySubtitleTracks(base, referer, subtitles));
         const shouldTranscode = shouldUseServerTranscode(url);
         if (shouldTranscode) {
           const streamProvider = window.streamProvider as {
@@ -284,10 +326,11 @@ export function WatchPage() {
               streamReferer: string | null
             ) => Promise<boolean>;
           };
+          activeTranscodeUrlRef.current = url;
           setTranscodeProgress({
             active: true,
             progressPercent: 0,
-            message: "Preparing video for playback...",
+            message: "Connecting to stream...",
           });
 
           let stopPolling = false;
@@ -315,17 +358,25 @@ export function WatchPage() {
             stopPolling = true;
             clearInterval(progressInterval);
           }
-          if (activeLoadTokenRef.current !== loadToken) return;
+          if (activeLoadTokenRef.current !== loadToken) {
+            if (activeTranscodeUrlRef.current === url) {
+              activeTranscodeUrlRef.current = null;
+              void window.streamProvider.cancelTranscodedStream(url);
+            }
+            return;
+          }
           setTranscodeProgress({
             active: false,
             progressPercent: 100,
-            message: "Transcode complete",
+            message: "Ready to play",
           });
         }
 
         const urlWithProxy = shouldTranscode
           ? `${base}/transcode/playlist.m3u8?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`
-          : `${base}/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
+          : isHlsPlaylistUrl(url)
+            ? `${base}/stream/playlist.m3u8?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`
+            : `${base}/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
         if (activeLoadTokenRef.current !== loadToken) return;
         setPlayUrl(urlWithProxy);
         setStreamRevision((r) => {
@@ -459,6 +510,12 @@ export function WatchPage() {
   useEffect(() => {
     return () => {
       clearReconnectTimeout();
+      activeLoadTokenRef.current += 1;
+      const transcodeUrl = activeTranscodeUrlRef.current;
+      activeTranscodeUrlRef.current = null;
+      if (transcodeUrl) {
+        void window.streamProvider.cancelTranscodedStream(transcodeUrl);
+      }
     };
   }, [clearReconnectTimeout]);
 
@@ -619,6 +676,7 @@ export function WatchPage() {
       currentEpisode={currentEpisode}
       episodes={episodes}
       videoRef={videoRef}
+      subtitleTracks={subtitleTracks}
       onBack={goBack}
       onEpisodeSelect={onEpisodeSelect}
       onRetryStream={retryStream}

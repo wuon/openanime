@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/renderer/lib/utils";
 
-import { VideoJsReactPlayer } from "./videojs-react-player";
+import { VideoJsReactPlayer, type PlayerSubtitleTrack } from "./videojs-react-player";
 import { Button } from "../ui/button";
 import {
   Select,
@@ -16,11 +16,16 @@ import {
 const watchEpisodeSelectTriggerClass =
   "h-8 w-[120px] border-white/25 bg-white/[0.12] text-white shadow-sm backdrop-blur-xl ring-offset-0 ring-offset-transparent placeholder:text-white/55 focus:ring-2 focus:ring-white/30 focus:ring-offset-0 hover:bg-white/[0.18] [&>svg]:text-white/75";
 
+const watchSubtitleSelectTriggerClass =
+  "h-8 w-[160px] border-white/25 bg-white/[0.12] text-white shadow-sm backdrop-blur-xl ring-offset-0 ring-offset-transparent placeholder:text-white/55 focus:ring-2 focus:ring-white/30 focus:ring-offset-0 hover:bg-white/[0.18] [&>svg]:text-white/75";
+
 const watchEpisodeSelectContentClass =
   "z-[120] max-h-[min(24rem,70vh)] rounded-xl border border-white/20 bg-black/50 p-1 text-white shadow-2xl shadow-black/50 backdrop-blur-2xl";
 
 const watchEpisodeSelectItemClass =
   "rounded-lg py-2 pl-8 pr-2 text-white/95 cursor-pointer focus:bg-white/[0.14] focus:text-white data-[highlighted]:bg-white/[0.14] data-[highlighted]:text-white data-[state=checked]:bg-white/[0.08]";
+
+const SUBTITLES_OFF_VALUE = "__off__";
 
 interface EpisodeOption {
   index: number;
@@ -45,6 +50,7 @@ interface WatchVideoPlayerShellProps {
   currentEpisode: number;
   episodes: EpisodeOption[];
   videoRef: React.RefObject<HTMLVideoElement>;
+  subtitleTracks?: PlayerSubtitleTrack[];
   onBack: () => void;
   onEpisodeSelect: (episode: string) => void;
   onRetryStream: () => void;
@@ -70,6 +76,7 @@ export function WatchVideoPlayerShell({
   currentEpisode,
   episodes,
   videoRef,
+  subtitleTracks,
   onBack,
   onEpisodeSelect,
   onRetryStream,
@@ -84,6 +91,43 @@ export function WatchVideoPlayerShell({
   const [arePlayerControlsVisible, setArePlayerControlsVisible] = useState(true);
   const [isTopChromeHovered, setIsTopChromeHovered] = useState(false);
   const [isEpisodeSelectOpen, setIsEpisodeSelectOpen] = useState(false);
+  const [isSubtitleSelectOpen, setIsSubtitleSelectOpen] = useState(false);
+  const [activeSubtitleLabel, setActiveSubtitleLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Keep subtitles off until the user picks one (or playback starts and we
+    // optionally enable the default). Auto-enabling at attach time races the
+    // subtitle CDN warm against the first video segments.
+    if (!subtitleTracks?.length) {
+      setActiveSubtitleLabel(null);
+      return;
+    }
+    setActiveSubtitleLabel(null);
+  }, [subtitleTracks, streamRevision]);
+
+  // Enable default subtitles after playback starts — do not wrap onPlaying
+  // (unstable inline handlers remount HlsVideo and flicker on cursor move).
+  useEffect(() => {
+    if (!playUrl || !subtitleTracks?.length) return;
+    const video = videoRef.current;
+    if (!video) return;
+
+    const onPlaying = () => {
+      setActiveSubtitleLabel((current) => {
+        if (current != null) return current;
+        return (
+          subtitleTracks.find((track) => track.default)?.label ??
+          subtitleTracks[0]?.label ??
+          null
+        );
+      });
+    };
+
+    video.addEventListener("playing", onPlaying);
+    return () => {
+      video.removeEventListener("playing", onPlaying);
+    };
+  }, [playUrl, streamRevision, subtitleTracks, videoRef]);
 
   const clearHideControlsTimer = () => {
     if (hideControlsTimerRef.current != null) {
@@ -165,7 +209,12 @@ export function WatchVideoPlayerShell({
   }, [playUrl, streamRevision, videoRef]);
 
   const isPlayerUiActive =
-    !playUrl || Boolean(playbackError) || arePlayerControlsVisible || isTopChromeHovered || isEpisodeSelectOpen;
+    !playUrl ||
+    Boolean(playbackError) ||
+    arePlayerControlsVisible ||
+    isTopChromeHovered ||
+    isEpisodeSelectOpen ||
+    isSubtitleSelectOpen;
 
   return (
     <div
@@ -214,6 +263,8 @@ export function WatchVideoPlayerShell({
               key={streamRevision}
               videoRef={videoRef}
               src={playUrl}
+              subtitleTracks={subtitleTracks}
+              activeSubtitleLabel={activeSubtitleLabel}
               className="absolute inset-0 h-full w-full object-contain bg-black"
               onLoadedMetadata={onLoadedMetadata}
               onPause={onPause}
@@ -289,6 +340,34 @@ export function WatchVideoPlayerShell({
         ) : null}
 
         <div className="flex items-center gap-2 shrink-0">
+          {subtitleTracks && subtitleTracks.length > 0 ? (
+            <Select
+              value={activeSubtitleLabel ?? SUBTITLES_OFF_VALUE}
+              onValueChange={(value) => {
+                setActiveSubtitleLabel(value === SUBTITLES_OFF_VALUE ? null : value);
+              }}
+              onOpenChange={setIsSubtitleSelectOpen}
+              disabled={loadingEpisode || !playUrl}
+            >
+              <SelectTrigger className={watchSubtitleSelectTriggerClass}>
+                <SelectValue placeholder="Subtitles" />
+              </SelectTrigger>
+              <SelectContent className={watchEpisodeSelectContentClass}>
+                <SelectItem value={SUBTITLES_OFF_VALUE} className={watchEpisodeSelectItemClass}>
+                  Subtitles off
+                </SelectItem>
+                {subtitleTracks.map((track) => (
+                  <SelectItem
+                    key={`${track.srclang}:${track.label}`}
+                    value={track.label}
+                    className={watchEpisodeSelectItemClass}
+                  >
+                    {track.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
           <Select
             value={currentEpisode.toString()}
             onValueChange={onEpisodeSelect}

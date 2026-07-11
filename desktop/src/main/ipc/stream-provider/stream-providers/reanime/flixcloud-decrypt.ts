@@ -1,5 +1,5 @@
 /**
- * Port of https://github.com/walterwhite-69/ReAnime.to-API/blob/main/decrypt.mjs
+ * Port of https://github.com/walterwhite-69/Anivexa-API/blob/main/providers/reanime.js
  * Decrypts flixcloud.cc embed pages to a playable HLS URL.
  */
 import { createDecipheriv, createHash, pbkdf2Sync } from "crypto";
@@ -58,6 +58,8 @@ async function flixFetch(url: string, init?: RequestInit): Promise<Response> {
 
 export interface FlixcloudStreamResult {
   url: string;
+  /** Base64 playlist XOR key from WASM `_c()` (flixcloud `__pk`). */
+  playlistKey: string;
   subtitles: unknown[];
   thumbnailsVtt: string | null;
   videoTitle: string | null;
@@ -150,36 +152,74 @@ function parseSsrDataObject(source: string): FlixEmbedSsrData {
   return runner();
 }
 
-async function runWasm(
+interface WasmDecryptResult {
+  keyMaterial: Buffer;
+  /** Base64 of 32-byte playlist XOR key (`window.__pk` on flixcloud). */
+  playlistKey: string;
+}
+
+/**
+ * Instantiate embed WASM: `_s`/`_r` produce AES key material; `_c` is the playlist XOR key.
+ */
+async function runWasmDecrypt(
   wasmBase64: string,
   frag1: Buffer,
   keyFrag2: Buffer,
   tokenBytes: Buffer,
   seedInt: number
-): Promise<Buffer> {
-  const wasmBuffer = decodeBase64(wasmBase64);
-  const { instance } = await WebAssembly.instantiate(wasmBuffer);
-  const exports = instance.exports as {
-    _s: (seed: number) => void;
-    _r: (y: number, v: number, t: number, out: number, len: number) => void;
-    memory: WebAssembly.Memory;
-  };
+): Promise<WasmDecryptResult> {
+  const wasmBytes = decodeBase64(wasmBase64);
+  if (!wasmBytes.length) {
+    throw new Error("Flixcloud w_payload missing from embed data");
+  }
 
-  const heap = new Uint8Array(exports.memory.buffer);
-  const len = frag1.length;
-  const base = 1000;
-  const y = base;
-  const v = base + len;
-  const t = base + 2 * len;
-  const out = base + 3 * len;
+  try {
+    const { instance } = await WebAssembly.instantiate(wasmBytes, {});
+    const exports = instance.exports as {
+      memory: WebAssembly.Memory;
+      _s: (seed: number) => void;
+      _r: (a: number, b: number, c: number, d: number, len: number) => void;
+      _c: () => number;
+    };
+    if (typeof exports._s !== "function" || typeof exports._r !== "function") {
+      throw new Error("Flixcloud WASM missing _s/_r exports");
+    }
+    if (typeof exports._c !== "function") {
+      throw new Error("Flixcloud WASM missing _c export (playlist key)");
+    }
 
-  heap.set(frag1, y);
-  heap.set(keyFrag2, v);
-  heap.set(tokenBytes, t);
-  exports._s(seedInt);
-  exports._r(y, v, t, out, len);
+    const memory = exports.memory;
+    if (memory.buffer.byteLength === 0) {
+      memory.grow(1);
+    }
+    const heap = new Uint8Array(memory.buffer);
+    const len = frag1.length;
+    const p = 1000;
+    const v = p + len;
+    const t = v + len;
+    const outPtr = t + len;
+    heap.set(frag1, p);
+    heap.set(keyFrag2, v);
+    heap.set(tokenBytes, t);
+    exports._s(seedInt);
+    exports._r(p, v, t, outPtr, len);
 
-  return Buffer.from(heap.subarray(out, out + len));
+    const keyMaterial = Buffer.from(heap.subarray(outPtr, outPtr + len));
+    const pkPtr = exports._c();
+    const pkBytes = Buffer.from(new Uint8Array(memory.buffer).subarray(pkPtr, pkPtr + 32));
+    if (pkBytes.length !== 32) {
+      throw new Error("Flixcloud WASM _c returned invalid playlist key");
+    }
+    return {
+      keyMaterial,
+      playlistKey: pkBytes.toString("base64"),
+    };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    log("wasm:instantiate-failed", { reason: message });
+    // Without `_c`, playlists stay XOR-wrapped and ffmpeg/hls cannot play them.
+    throw new Error(`Flixcloud WASM playlist key unavailable: ${message}`);
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -264,7 +304,13 @@ export async function decryptFlixcloudEmbedHtml(
 
   const seedInt = parseInt(seed.substring(0, 8), 16);
   const wasmStartedAt = Date.now();
-  const wasmOut = await runWasm(String(data.w_payload), frag1, keyFrag2, tokenBytes, seedInt);
+  const { keyMaterial: wasmOut, playlistKey } = await runWasmDecrypt(
+    String(data.w_payload ?? ""),
+    frag1,
+    keyFrag2,
+    tokenBytes,
+    seedInt
+  );
   logStep("wasm", wasmStartedAt, `bytes=${wasmOut.length}`);
   const derived = pbkdf2Sync(wasmOut, seed, 1000, 32, "sha256");
   const mixed = Buffer.from(derived);
@@ -286,6 +332,7 @@ export async function decryptFlixcloudEmbedHtml(
 
   return {
     url,
+    playlistKey,
     subtitles: Array.isArray(data.subtitles) ? data.subtitles : [],
     thumbnailsVtt: data.thumbnails_vtt ?? null,
     videoTitle: data.video_title ?? null,
