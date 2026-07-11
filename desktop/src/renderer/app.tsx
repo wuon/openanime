@@ -9,6 +9,7 @@ import { syncThemeWithLocal } from "@/renderer/helpers/theme/theme-helper";
 import { ScrollToTop } from "@/renderer/components/scroll-to-top";
 import SidebarLayout from "@/renderer/layouts/sidebar-layout";
 import { HistoryPage } from "@/renderer/pages/history-page";
+import { BookmarksPage } from "@/renderer/pages/bookmarks-page";
 import { PlayerPage } from "@/renderer/pages/player-page";
 import { SearchPage } from "@/renderer/pages/search-page";
 import { SettingsPage } from "@/renderer/pages/settings-page";
@@ -31,6 +32,7 @@ export default function App() {
         <Route element={<SidebarLayout />}>
           <Route path="/" element={<WelcomePage />} />
           <Route path="/search" element={<SearchPage />} />
+          <Route path="/bookmarks" element={<BookmarksPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/show/:id" element={<ShowDetailsPage />} />

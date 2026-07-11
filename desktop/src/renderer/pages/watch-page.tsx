@@ -6,7 +6,7 @@ import { DisabledStreamProviderDialog } from "@/renderer/components/disabled-str
 import { Button } from "@/renderer/components/ui/button";
 import { useGoBack } from "@/renderer/hooks/use-go-back";
 import { isHistoryProviderDisabled } from "@/shared/stream-providers";
-import type { Episode, HistoryEntry } from "@/shared/types";
+import type { AniListMediaListStatus, Episode, HistoryEntry } from "@/shared/types";
 import { isHlsPlaylistUrl } from "@/shared/utils/hls-url";
 
 import { type RichShowDetails, useShowDetails } from "../hooks/use-show-details";
@@ -136,6 +136,13 @@ export function WatchPage() {
   const deferredHistoryUpsertRef = useRef<{ revision: number; ep: string } | null>(null);
   const activeLoadTokenRef = useRef(0);
   const historyProviderRef = useRef<HistoryEntry["provider"]>("allanime");
+  const anilistListRef = useRef<{
+    mediaId: number;
+    listEntryId?: number | null;
+    currentStatus?: AniListMediaListStatus | null;
+    totalEpisodes?: number;
+  } | null>(null);
+  const anilistSyncedEpisodeRef = useRef<number | null>(null);
 
   const clearReconnectTimeout = useCallback(() => {
     if (reconnectTimeoutRef.current != null) {
@@ -143,6 +150,41 @@ export function WatchPage() {
       reconnectTimeoutRef.current = null;
     }
   }, []);
+
+  const syncAniListProgress = useCallback(
+    async (episodeNumber: number, episodeCompleted = false) => {
+      const ctx = anilistListRef.current;
+      if (!ctx) return;
+      if (!episodeCompleted && anilistSyncedEpisodeRef.current === episodeNumber) return;
+
+      try {
+        const status = await window.anilist.getStatus();
+        if (!status.connected) return;
+
+        const entry = await window.anilist.syncWatchProgress({
+          mediaId: ctx.mediaId,
+          episodeNumber,
+          totalEpisodes: ctx.totalEpisodes,
+          currentStatus: ctx.currentStatus,
+          listEntryId: ctx.listEntryId,
+          episodeCompleted,
+        });
+        if (entry) {
+          anilistListRef.current = {
+            ...ctx,
+            listEntryId: entry.id,
+            currentStatus: entry.status,
+          };
+        }
+        if (!episodeCompleted) {
+          anilistSyncedEpisodeRef.current = episodeNumber;
+        }
+      } catch {
+        // best-effort
+      }
+    },
+    []
+  );
 
   const syncHistoryProgress = useCallback(async (opts?: { sync?: boolean }) => {
     const base = lastHistoryEntryRef.current;
@@ -193,7 +235,8 @@ export function WatchPage() {
 
   const handleVideoEnded = useCallback(() => {
     void syncHistoryProgress();
-  }, [syncHistoryProgress]);
+    void syncAniListProgress(currentEpisode, true);
+  }, [syncHistoryProgress, syncAniListProgress, currentEpisode]);
 
   const handleVideoLoadedMetadata = useCallback<React.ReactEventHandler<HTMLVideoElement>>(
     (e) => {
@@ -296,6 +339,7 @@ export function WatchPage() {
           historyProviderRef.current,
           null
         );
+        void syncAniListProgress(Number(ep));
       } catch (err) {
         if (activeLoadTokenRef.current !== loadToken) return;
         setError(err instanceof Error ? err.message : "Failed to load stream");
@@ -306,8 +350,64 @@ export function WatchPage() {
         }
       }
     },
-    [episode, clearReconnectTimeout, streamProviderOverride]
+    [episode, clearReconnectTimeout, streamProviderOverride, syncAniListProgress]
   );
+
+  useEffect(() => {
+    if (!episode?.id) {
+      anilistListRef.current = null;
+      anilistSyncedEpisodeRef.current = null;
+      return;
+    }
+    const mediaId = Number(episode.id);
+    if (!Number.isInteger(mediaId) || mediaId <= 0) {
+      anilistListRef.current = null;
+      return;
+    }
+
+    anilistListRef.current = { mediaId };
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const status = await window.anilist.getStatus();
+        if (!status.connected || cancelled) return;
+        const details = await window.anilist.getShowDetails(mediaId);
+        if (cancelled) return;
+        const listEntry = details.mediaListEntry;
+        anilistListRef.current = {
+          mediaId,
+          listEntryId: listEntry?.id,
+          currentStatus: listEntry?.status as AniListMediaListStatus | undefined,
+          totalEpisodes: details.episodes ?? undefined,
+        };
+      } catch {
+        anilistListRef.current = { mediaId };
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [episode?.id]);
+
+  useEffect(() => {
+    if (showLoading || !showDetails) return;
+    const ctx = anilistListRef.current;
+    if (!ctx) return;
+    const subCount = showDetails.episodes.sub?.length ?? 0;
+    const dubCount = showDetails.episodes.dub?.length ?? 0;
+    const totalEpisodes = Math.max(subCount, dubCount);
+    const next = { ...ctx };
+    if (totalEpisodes > 0) {
+      next.totalEpisodes = totalEpisodes;
+    }
+    if (showDetails.anilistListEntry) {
+      next.listEntryId = showDetails.anilistListEntry.id;
+      next.currentStatus = showDetails.anilistListEntry.status as AniListMediaListStatus;
+    }
+    anilistListRef.current = next;
+  }, [showLoading, showDetails]);
 
   useEffect(() => {
     if (!episode) return;
@@ -365,6 +465,7 @@ export function WatchPage() {
   const onEpisodeSelect = useCallback(
     (ep: string) => {
       setCurrentEpisode(Number(ep));
+      anilistSyncedEpisodeRef.current = null;
       void (async () => {
         await syncHistoryProgress();
         await loadStream(ep);

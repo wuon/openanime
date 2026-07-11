@@ -3,6 +3,7 @@ import { app, safeStorage, shell } from "electron";
 import { appStore } from "@/main/store";
 import type { AniListIntegrationStatus } from "@/shared/types";
 
+import { clearAniListViewerIdCache } from "./anilist-authed-api";
 import { fetchAniListViewerName } from "./anilist-user";
 
 const PROD_PROTOCOL = "openanime";
@@ -67,6 +68,7 @@ export function saveAniListAccessToken(token: string): void {
 
 export function clearAniListAccessToken(): void {
   appStore.delete(ANILIST_ACCESS_TOKEN_STORE_KEY);
+  clearAniListViewerIdCache();
 }
 
 function buildAuthorizeUrl(): string {

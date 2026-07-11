@@ -2,6 +2,7 @@ import { ArrowLeft, Play, Search } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
+import { AniListListControls } from "@/renderer/components/anilist-list-controls";
 import { EpisodeCard } from "@/renderer/components/episode-card";
 import { Badge } from "@/renderer/components/ui/badge";
 import { Button } from "@/renderer/components/ui/button";
@@ -17,7 +18,7 @@ import { Skeleton } from "@/renderer/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/renderer/components/ui/tabs";
 import { useGoBack } from "@/renderer/hooks/use-go-back";
 import { useShowDetails } from "@/renderer/hooks/use-show-details";
-import { Show } from "@/shared/types";
+import type { AniListMediaListStatus, Show } from "@/shared/types";
 
 const SHOW_DETAILS_EPISODE_SKELETON_COUNT = 8;
 
@@ -124,6 +125,9 @@ export function ShowDetailsPage() {
   useEffect(() => {
     setActiveMode(anime?.mode ?? "sub");
   }, [anime?.id, anime?.mode]);
+
+  const mediaId = Number(id);
+  const hasAniListId = Number.isInteger(mediaId) && mediaId > 0;
 
   const { details, episodesByMode, loading, error } = useShowDetails(id, anime?.providerId);
 
@@ -318,9 +322,10 @@ export function ShowDetailsPage() {
                   </Badge>
                 ))}
               </div>
-              <div className="flex items-center pt-1">
+              <div className="flex flex-wrap items-center gap-2 pt-1">
                 <Button
                   type="button"
+                  size="sm"
                   onClick={() => {
                     if (episodes[0]) {
                       playEpisode(episodes[0]);
@@ -330,8 +335,18 @@ export function ShowDetailsPage() {
                   className="cursor-pointer font-semibold"
                 >
                   <Play className="h-4 w-4 fill-current" />
-                  Play - Episode {episodes[0]}
+                  Watch Now
                 </Button>
+                {hasAniListId && (
+                  <AniListListControls
+                    mediaId={mediaId}
+                    listEntryId={details?.anilistListEntry?.id}
+                    listStatus={
+                      details?.anilistListEntry?.status as AniListMediaListStatus | undefined
+                    }
+                    isFavourite={details?.anilistIsFavourite}
+                  />
+                )}
               </div>
             </div>
 

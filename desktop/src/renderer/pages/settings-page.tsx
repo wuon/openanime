@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 
+import { AniListConnectDialog } from "@/renderer/components/anilist-connect-dialog";
 import { ThemePicker } from "@/renderer/components/theme-picker";
 import { Button } from "@/renderer/components/ui/button";
-import { Input } from "@/renderer/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -12,9 +12,9 @@ import {
 } from "@/renderer/components/ui/select";
 import type { AppUpdateCheckResult } from "@/shared/app-update-types";
 import {
+  STREAM_PROVIDER_LABELS,
   getEnabledStreamProviders,
   isStreamProviderName,
-  STREAM_PROVIDER_LABELS,
 } from "@/shared/stream-providers";
 import type { AniListIntegrationStatus, StreamProvider } from "@/shared/types";
 
@@ -35,12 +35,9 @@ export function SettingsPage() {
   const [clearHistoryBusy, setClearHistoryBusy] = useState(false);
   const [anilistStatus, setAnilistStatus] = useState<AniListIntegrationStatus | null>(null);
   const [anilistStatusLoading, setAnilistStatusLoading] = useState(true);
-  const [anilistConnectBusy, setAnilistConnectBusy] = useState(false);
+  const [anilistConnectOpen, setAnilistConnectOpen] = useState(false);
   const [anilistDisconnectBusy, setAnilistDisconnectBusy] = useState(false);
   const [anilistError, setAnilistError] = useState<string | null>(null);
-  const [anilistPinToken, setAnilistPinToken] = useState("");
-  const [anilistPinOpenBusy, setAnilistPinOpenBusy] = useState(false);
-  const [anilistPinSubmitBusy, setAnilistPinSubmitBusy] = useState(false);
   const enabledStreamProviders = getEnabledStreamProviders();
   const [activeStreamProvider, setActiveStreamProvider] = useState<StreamProvider>(
     enabledStreamProviders[0] ?? "allanime"
@@ -127,51 +124,6 @@ export function SettingsPage() {
     void refreshAnilistStatus();
   }, [isDevelopment, refreshAnilistStatus]);
 
-  const onAnilistConnect = useCallback(async () => {
-    setAnilistConnectBusy(true);
-    setAnilistError(null);
-    try {
-      const result = await window.anilist.connect();
-      if (result.ok) {
-        await refreshAnilistStatus();
-      } else {
-        const { error } = result as { ok: false; error: string };
-        setAnilistError(error);
-      }
-    } finally {
-      setAnilistConnectBusy(false);
-    }
-  }, [refreshAnilistStatus]);
-
-  const onAnilistOpenPinAuth = useCallback(async () => {
-    setAnilistPinOpenBusy(true);
-    setAnilistError(null);
-    try {
-      await window.anilist.openPinAuthPage();
-    } catch (e) {
-      setAnilistError(e instanceof Error ? e.message : "Could not open AniList.");
-    } finally {
-      setAnilistPinOpenBusy(false);
-    }
-  }, []);
-
-  const onAnilistSubmitPinToken = useCallback(async () => {
-    setAnilistPinSubmitBusy(true);
-    setAnilistError(null);
-    try {
-      const result = await window.anilist.submitManualToken(anilistPinToken);
-      if (result.ok) {
-        setAnilistPinToken("");
-        await refreshAnilistStatus();
-      } else {
-        const { error } = result as { ok: false; error: string };
-        setAnilistError(error);
-      }
-    } finally {
-      setAnilistPinSubmitBusy(false);
-    }
-  }, [anilistPinToken, refreshAnilistStatus]);
-
   const onAnilistDisconnect = useCallback(async () => {
     setAnilistDisconnectBusy(true);
     setAnilistError(null);
@@ -251,145 +203,69 @@ export function SettingsPage() {
         )}
       </section>
 
-      {isDevelopment && (
-        <section className="rounded-xl border border-border p-5 flex flex-col gap-6">
-          <div className="space-y-1 min-w-0">
-            <h2 className="text-sm font-medium">Integrations</h2>
+      <section className="rounded-xl border border-border p-5 flex flex-col gap-6">
+        <div className="space-y-1 min-w-0">
+          <h2 className="text-sm font-medium">Integrations</h2>
+          <p className="text-sm text-muted-foreground">
+            Connect to third-party services to keep track of your watch list, bookmarks, and more.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-1 min-w-0 max-w-xl">
+            <h3 className="text-sm font-medium">AniList</h3>
+            {anilistError && (
+              <p className="text-sm text-destructive" role="alert">
+                {anilistError}
+              </p>
+            )}
             <p className="text-sm text-muted-foreground">
-              Connect third-party services. More providers will appear here over time.
+              {anilistStatusLoading
+                ? "…"
+                : anilistStatus?.connected && anilistStatus.username
+                  ? `Signed in as ${anilistStatus.username}.`
+                  : "Not connected."}
             </p>
           </div>
-
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div className="space-y-1 min-w-0 max-w-xl">
-              <h3 className="text-sm font-medium">AniList</h3>
-              <p className="text-sm text-muted-foreground">
-                {anilistStatusLoading
-                  ? "…"
-                  : anilistStatus?.connected && anilistStatus.username
-                    ? `Signed in as ${anilistStatus.username}.`
-                    : "Not connected."}
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 sm:items-end sm:shrink-0 w-full sm:w-auto">
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                <Button
-                  type="button"
-                  className="w-full sm:w-auto"
-                  disabled={
-                    anilistStatusLoading ||
-                    anilistConnectBusy ||
-                    anilistDisconnectBusy ||
-                    Boolean(anilistStatus?.connected)
-                  }
-                  onClick={() => {
-                    void onAnilistConnect();
-                  }}
-                >
-                  {anilistConnectBusy ? "Connecting…" : "Connect"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                  disabled={
-                    anilistStatusLoading ||
-                    anilistConnectBusy ||
-                    anilistDisconnectBusy ||
-                    !anilistStatus?.connected
-                  }
-                  onClick={() => {
-                    void onAnilistDisconnect();
-                  }}
-                >
-                  {anilistDisconnectBusy ? "Disconnecting…" : "Disconnect"}
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {anilistError && (
-            <p className="text-sm text-destructive" role="alert">
-              {anilistError}
-            </p>
-          )}
-
-          <div className="border-t border-border pt-4 flex flex-col gap-3">
-            <div className="space-y-1 min-w-0 max-w-xl">
-              <h4 className="text-sm font-medium">Pin fallback</h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                If custom URL sign-in does not work, set your AniList client&apos;s redirect URL to{" "}
-                <code className="font-mono text-[0.8rem]">https://anilist.co/api/v2/oauth/pin</code>
-                , open AniList below, then paste the access token shown on the pin page.
-              </p>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="flex flex-col gap-2 sm:items-end sm:shrink-0 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                disabled={
+                  anilistStatusLoading || anilistDisconnectBusy || Boolean(anilistStatus?.connected)
+                }
+                onClick={() => {
+                  setAnilistConnectOpen(true);
+                }}
+              >
+                Connect
+              </Button>
               <Button
                 type="button"
                 variant="outline"
-                className="w-full sm:w-auto shrink-0"
+                className="w-full sm:w-auto"
                 disabled={
-                  anilistStatusLoading ||
-                  anilistConnectBusy ||
-                  anilistDisconnectBusy ||
-                  anilistPinOpenBusy ||
-                  anilistPinSubmitBusy ||
-                  Boolean(anilistStatus?.connected)
+                  anilistStatusLoading || anilistDisconnectBusy || !anilistStatus?.connected
                 }
                 onClick={() => {
-                  void onAnilistOpenPinAuth();
+                  void onAnilistDisconnect();
                 }}
               >
-                {anilistPinOpenBusy ? "Opening…" : "Open AniList (pin)"}
-              </Button>
-              <div className="flex flex-1 flex-col gap-2 min-w-0 sm:min-w-[240px] sm:max-w-md">
-                <Input
-                  type="password"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder="Paste access token"
-                  value={anilistPinToken}
-                  disabled={
-                    anilistStatusLoading ||
-                    anilistConnectBusy ||
-                    anilistDisconnectBusy ||
-                    anilistPinSubmitBusy ||
-                    Boolean(anilistStatus?.connected)
-                  }
-                  onChange={(e) => {
-                    setAnilistPinToken(e.target.value);
-                  }}
-                />
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full sm:w-auto shrink-0"
-                disabled={
-                  anilistStatusLoading ||
-                  anilistConnectBusy ||
-                  anilistDisconnectBusy ||
-                  anilistPinSubmitBusy ||
-                  !anilistPinToken.trim() ||
-                  Boolean(anilistStatus?.connected)
-                }
-                onClick={() => {
-                  void onAnilistSubmitPinToken();
-                }}
-              >
-                {anilistPinSubmitBusy ? "Saving…" : "Save token"}
+                {anilistDisconnectBusy ? "Disconnecting…" : "Disconnect"}
               </Button>
             </div>
           </div>
+        </div>
 
-          <div className="border-t border-border pt-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1 min-w-0">
-              <h3 className="text-sm font-medium text-muted-foreground">MyAnimeList</h3>
-              <p className="text-sm text-muted-foreground">Coming soon.</p>
-            </div>
-          </div>
-        </section>
-      )}
+        <AniListConnectDialog
+          open={anilistConnectOpen}
+          onOpenChange={setAnilistConnectOpen}
+          onConnected={() => {
+            void refreshAnilistStatus();
+          }}
+        />
+      </section>
 
       <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1 min-w-0">
@@ -425,7 +301,9 @@ export function SettingsPage() {
               void onStreamProviderChange(value);
             }
           }}
-          disabled={streamProviderLoading || streamProviderBusy || enabledStreamProviders.length === 0}
+          disabled={
+            streamProviderLoading || streamProviderBusy || enabledStreamProviders.length === 0
+          }
         >
           <SelectTrigger className="sm:shrink-0 w-full sm:w-[220px]">
             <SelectValue />

@@ -141,7 +141,11 @@ export interface AniListShowDetails {
   mediaListEntry?: {
     id: number;
     status: string;
+    progress?: number | null;
+    startedAt?: AniListFuzzyDate | null;
+    completedAt?: AniListFuzzyDate | null;
   } | null;
+  isFavourite?: boolean | null;
   studios?: Array<{
     isMain?: boolean | null;
     node: { id: number; name: string };
@@ -195,6 +199,95 @@ export interface AniListMediaPageResult {
 }
 
 export type AniListIntegrationStatus = { connected: false } | { connected: true; username: string };
+
+export type AniListMediaListStatus =
+  | "CURRENT"
+  | "PLANNING"
+  | "COMPLETED"
+  | "REPEATING"
+  | "PAUSED"
+  | "DROPPED";
+
+export interface AniListFuzzyDate {
+  year?: number | null;
+  month?: number | null;
+  day?: number | null;
+}
+
+export interface AniListListMedia {
+  id: number;
+  title?: {
+    english?: string | null;
+    romaji?: string | null;
+    native?: string | null;
+    userPreferred?: string | null;
+  } | null;
+  coverImage?: {
+    extraLarge?: string | null;
+    large?: string | null;
+  } | null;
+  bannerImage?: string | null;
+  episodes?: number | null;
+  averageScore?: number | null;
+  season?: string | null;
+  seasonYear?: number | null;
+  status?: string | null;
+}
+
+export interface AniListListEntry {
+  id: number;
+  status: AniListMediaListStatus;
+  progress: number;
+  score?: number;
+  repeat: number;
+  startedAt?: AniListFuzzyDate | null;
+  completedAt?: AniListFuzzyDate | null;
+  media: AniListListMedia;
+}
+
+export type AniListFavouriteMedia = AniListListMedia & {
+  isFavourite: boolean;
+};
+
+export interface AniListListPageResult {
+  entries: AniListListEntry[];
+  pageInfo: {
+    total?: number | null;
+    perPage?: number | null;
+    currentPage?: number | null;
+    lastPage?: number | null;
+    hasNextPage?: boolean | null;
+  };
+}
+
+export interface AniListFavouritesPageResult {
+  media: AniListFavouriteMedia[];
+  pageInfo: {
+    total?: number | null;
+    perPage?: number | null;
+    currentPage?: number | null;
+    lastPage?: number | null;
+    hasNextPage?: boolean | null;
+  };
+}
+
+export interface AniListSaveListEntryInput {
+  id?: number;
+  mediaId?: number;
+  status?: AniListMediaListStatus;
+  progress?: number;
+  startedAt?: AniListFuzzyDate;
+  completedAt?: AniListFuzzyDate;
+}
+
+export interface AniListSyncWatchProgressInput {
+  mediaId: number;
+  episodeNumber: number;
+  totalEpisodes?: number;
+  currentStatus?: AniListMediaListStatus | null;
+  listEntryId?: number | null;
+  episodeCompleted?: boolean;
+}
 
 interface HistoryEntry {
   id: string;
@@ -265,6 +358,16 @@ export interface AniListContext {
   getStatus: () => Promise<AniListIntegrationStatus>;
   openPinAuthPage: () => Promise<void>;
   submitManualToken: (token: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+
+  getMediaList: (
+    status: AniListMediaListStatus,
+    page?: number
+  ) => Promise<AniListListPageResult>;
+  getFavourites: (page?: number) => Promise<AniListFavouritesPageResult>;
+  saveListEntry: (input: AniListSaveListEntryInput) => Promise<AniListListEntry>;
+  deleteListEntry: (listEntryId: number) => Promise<void>;
+  toggleFavourite: (mediaId: number) => Promise<boolean>;
+  syncWatchProgress: (input: AniListSyncWatchProgressInput) => Promise<AniListListEntry | null>;
 }
 
 declare global {

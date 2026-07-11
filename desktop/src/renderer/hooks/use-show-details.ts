@@ -37,6 +37,13 @@ export type RichShowDetails = {
   season?: string | null;
   seasonYear?: number | null;
   status?: string | null;
+  anilistMediaId?: number | null;
+  anilistListEntry?: {
+    id: number;
+    status: string;
+    progress?: number | null;
+  } | null;
+  anilistIsFavourite?: boolean;
 };
 
 interface UseShowDetailsResult {
@@ -74,7 +81,8 @@ function canonicalizeRichShowDetails(
   streamDetails: ShowDetails,
   subEpisodes: string[],
   dubEpisodes: string[],
-  aniListDetails: AniListShowDetails | null
+  aniListDetails: AniListShowDetails | null,
+  mediaId: number | null
 ): RichShowDetails {
   const coverImage =
     aniListDetails?.coverImage?.extraLarge ??
@@ -109,6 +117,10 @@ function canonicalizeRichShowDetails(
     season: aniListDetails?.season ?? null,
     seasonYear: aniListDetails?.seasonYear ?? null,
     status: aniListDetails?.status ?? null,
+    anilistMediaId:
+      Number.isInteger(mediaId) && mediaId > 0 ? mediaId : null,
+    anilistListEntry: aniListDetails?.mediaListEntry ?? null,
+    anilistIsFavourite: aniListDetails?.isFavourite === true,
   };
 }
 
@@ -192,7 +204,13 @@ export function useShowDetails(
           aniListResult.status === "fulfilled" ? (aniListResult.value as AniListShowDetails) : null;
 
         setDetails(
-          canonicalizeRichShowDetails(streamDetails, subEpisodes, dubEpisodes, aniListDetails)
+          canonicalizeRichShowDetails(
+            streamDetails,
+            subEpisodes,
+            dubEpisodes,
+            aniListDetails,
+            shouldFetchAniList ? mediaId : null
+          )
         );
       })
       .catch((err: unknown) => {

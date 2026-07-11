@@ -1,6 +1,7 @@
 import type { AniListShowDetails } from "@/shared/types";
 
 import { postAniListGraphql } from "./anilist-api";
+import { getStoredAniListAccessToken } from "./anilist-oauth";
 
 const MEDIA_QUERY = `
   query Media($mediaId: Int) {
@@ -27,6 +28,14 @@ const MEDIA_QUERY = `
       season
       seasonYear
       status
+      isFavourite
+      mediaListEntry {
+        id
+        status
+        progress
+        startedAt { year month day }
+        completedAt { year month day }
+      }
     }
   }
 `;
@@ -42,7 +51,9 @@ export async function getAniListShowDetails(mediaId: number): Promise<AniListSho
     throw new Error("Invalid AniList media id");
   }
 
-  const data = await postAniListGraphql<AniListMediaResponse>(MEDIA_QUERY, { mediaId });
+  const token = getStoredAniListAccessToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+  const data = await postAniListGraphql<AniListMediaResponse>(MEDIA_QUERY, { mediaId }, headers);
   const media = data.Media;
   if (!media) {
     throw new Error("AniList media not found");
