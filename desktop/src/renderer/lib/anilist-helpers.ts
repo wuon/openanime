@@ -1,5 +1,15 @@
 import type { AniListListMedia, AniListMediaListStatus } from "@/shared/types";
 
+/** AniList descriptions often include `<br>`, `<i>`, etc. Strip tags for plain text UI. */
+export function stripAniListDescription(html: string | null | undefined): string {
+  if (!html) return "";
+  return html
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function anilistMediaTitle(media: AniListListMedia): string {
   return (
     media.title?.userPreferred ??

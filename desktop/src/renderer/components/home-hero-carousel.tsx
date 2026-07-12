@@ -1,10 +1,11 @@
-import { Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Badge } from "@/renderer/components/ui/badge";
 import { Button } from "@/renderer/components/ui/button";
 import { Skeleton } from "@/renderer/components/ui/skeleton";
+import { stripAniListDescription } from "@/renderer/lib/anilist-helpers";
 import { cn } from "@/renderer/lib/utils";
 import type { AniListShowDetails } from "@/shared/types";
 
@@ -13,15 +14,6 @@ const HERO_BOTTOM_BLEND =
 
 const HERO_LEFT_BLEND =
   "linear-gradient(to left, transparent 36%, hsl(var(--background) / 0.35) 58%, hsl(var(--background) / 0.82) 70%, hsl(var(--background)) 100%)";
-
-function stripAniListDescription(html: string | null | undefined): string {
-  if (!html) return "";
-  return html
-    .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<[^>]+>/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 function displayTitle(show: AniListShowDetails): string {
   return (
@@ -67,7 +59,6 @@ function HomeHeroSlide({ show, isActive }: { show: AniListShowDetails; isActive:
   const navigate = useNavigate();
   const title = displayTitle(show);
   const bg = heroImage(show);
-  const poster = coverUrl(show);
   const description = stripAniListDescription(show.description);
   const badges = metaBadges(show);
 
@@ -110,39 +101,28 @@ function HomeHeroSlide({ show, isActive }: { show: AniListShowDetails; isActive:
           <div className="absolute inset-0 bg-muted" aria-hidden />
         )}
         <div className="relative flex flex-col gap-6 pt-24 p-6 text-white">
-          <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-            <div className="max-w-3xl space-y-4">
-              <h2 className="line-clamp-2 text-3xl font-bold leading-tight text-foreground md:text-5xl">
-                {title}
-              </h2>
-              {description ? (
-                <p className="line-clamp-3 max-w-2xl text-sm text-muted-foreground md:text-base">
-                  {description}
-                </p>
-              ) : null}
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                {badges.map((entry) => (
-                  <Badge key={entry} variant="secondary">
-                    {entry}
-                  </Badge>
-                ))}
-              </div>
-              <div className="flex items-center pt-1">
-                <Button type="button" onClick={goSearch} className="cursor-pointer font-semibold">
-                  <Search className="h-4 w-4" />
-                  Find in app
-                </Button>
-              </div>
-            </div>
-
-            {poster ? (
-              <img
-                src={poster}
-                draggable={false}
-                alt=""
-                className="h-64 w-auto rounded-xl border-2 border-transparent/20 object-cover"
-              />
+          <div className="max-w-3xl space-y-4">
+            <h2 className="line-clamp-2 text-3xl font-bold leading-tight text-foreground md:text-5xl">
+              {title}
+            </h2>
+            {description ? (
+              <p className="line-clamp-3 max-w-2xl text-sm text-muted-foreground md:text-base">
+                {description}
+              </p>
             ) : null}
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {badges.map((entry) => (
+                <Badge key={entry} variant="secondary">
+                  {entry}
+                </Badge>
+              ))}
+            </div>
+            <div className="flex items-center pt-1">
+              <Button type="button" onClick={goSearch} className="cursor-pointer font-semibold">
+                <Search className="h-4 w-4" />
+                Find in app
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -155,21 +135,18 @@ function HomeHeroSkeleton() {
     <div className="relative min-h-[280px] overflow-hidden md:min-h-[320px]" aria-busy="true">
       <div className="absolute inset-0 bg-muted" aria-hidden />
       <div className="relative flex flex-col gap-6 p-6 md:p-8">
-        <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-          <div className="max-w-3xl space-y-4">
-            <Skeleton className="h-10 w-4/5 max-w-xl bg-foreground/10 md:h-14" />
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-full max-w-2xl bg-foreground/10" />
-              <Skeleton className="h-4 w-full max-w-2xl bg-foreground/10" />
-              <Skeleton className="h-4 w-3/4 max-w-lg bg-foreground/10" />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Skeleton className="h-5 w-14 rounded-full bg-foreground/10" />
-              <Skeleton className="h-5 w-20 rounded-full bg-foreground/10" />
-            </div>
-            <Skeleton className="h-10 w-40 rounded-md bg-foreground/10" />
+        <div className="max-w-3xl space-y-4">
+          <Skeleton className="h-10 w-4/5 max-w-xl bg-foreground/10 md:h-14" />
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full max-w-2xl bg-foreground/10" />
+            <Skeleton className="h-4 w-full max-w-2xl bg-foreground/10" />
+            <Skeleton className="h-4 w-3/4 max-w-lg bg-foreground/10" />
           </div>
-          <Skeleton className="h-64 w-48 shrink-0 rounded-xl bg-foreground/10" />
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-5 w-14 rounded-full bg-foreground/10" />
+            <Skeleton className="h-5 w-20 rounded-full bg-foreground/10" />
+          </div>
+          <Skeleton className="h-10 w-40 rounded-md bg-foreground/10" />
         </div>
       </div>
     </div>
@@ -227,6 +204,16 @@ export function HomeHeroCarousel() {
     [items.length]
   );
 
+  const goPrev = useCallback(() => {
+    if (items.length === 0) return;
+    setActiveIndex((i) => (i - 1 + items.length) % items.length);
+  }, [items.length]);
+
+  const goNext = useCallback(() => {
+    if (items.length === 0) return;
+    setActiveIndex((i) => (i + 1) % items.length);
+  }, [items.length]);
+
   useEffect(() => {
     if (items.length <= 1) return;
     const id = window.setInterval(() => {
@@ -276,8 +263,27 @@ export function HomeHeroCarousel() {
 
       {items.length > 1 ? (
         <>
+          <div className="absolute right-6 top-6 z-20 flex items-center gap-2">
+            <button
+              type="button"
+              aria-label="Previous slide"
+              onClick={goPrev}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              aria-label="Next slide"
+              onClick={goNext}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+            >
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+
           <div
-            className="pointer-events-none absolute bottom-3 left-0 right-0 z-20 flex justify-center gap-1.5"
+            className="pointer-events-none absolute bottom-4 right-6 z-20 flex items-center gap-1.5"
             aria-label="Slide indicators"
           >
             {items.map((show, i) => {
@@ -290,8 +296,10 @@ export function HomeHeroCarousel() {
                   aria-current={isActive ? "true" : undefined}
                   onClick={() => goToIndex(i)}
                   className={cn(
-                    "pointer-events-auto h-2 shrink-0 rounded-full w-2 bg-foreground/25 hover:bg-foreground/40",
-                    isActive ? "bg-foreground hover:bg-foreground/90" : ""
+                    "pointer-events-auto h-2 shrink-0 rounded-full transition-all duration-300",
+                    isActive
+                      ? "w-6 bg-white hover:bg-white/90"
+                      : "w-2 bg-white/35 hover:bg-white/55"
                   )}
                 />
               );

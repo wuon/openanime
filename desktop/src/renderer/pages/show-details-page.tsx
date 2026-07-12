@@ -18,6 +18,7 @@ import { Skeleton } from "@/renderer/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/renderer/components/ui/tabs";
 import { useGoBack } from "@/renderer/hooks/use-go-back";
 import { useShowDetails } from "@/renderer/hooks/use-show-details";
+import { stripAniListDescription } from "@/renderer/lib/anilist-helpers";
 import type { AniListMediaListStatus, Show } from "@/shared/types";
 
 const SHOW_DETAILS_EPISODE_SKELETON_COUNT = 8;
@@ -258,6 +259,7 @@ export function ShowDetailsPage() {
   ].filter(Boolean);
 
   const heroImage = details?.bannerImage ?? details?.coverImage ?? null;
+  const description = stripAniListDescription(details?.description);
 
   const heroBottomBlendGradient =
     "linear-gradient(to bottom, transparent 36%, hsl(var(--background) / 0.35) 58%, hsl(var(--background) / 0.82) 78%, hsl(var(--background)) 100%)";
@@ -310,9 +312,9 @@ export function ShowDetailsPage() {
               <h1 className="text-3xl font-bold leading-tight text-foreground md:text-5xl">
                 {displayName}
               </h1>
-              {details?.description && (
+              {description && (
                 <p className="line-clamp-3 max-w-2xl text-sm text-muted-foreground md:text-base">
-                  {details.description}
+                  {description}
                 </p>
               )}
               <div className="flex flex-wrap items-center gap-2 text-xs">
