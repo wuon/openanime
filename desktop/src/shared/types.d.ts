@@ -327,6 +327,8 @@ interface AppContext {
   /** True when required system dependencies are missing (e.g. Git Bash on Windows). */
   dependenciesRequired: () => Promise<boolean>;
   checkForUpdate: () => Promise<AppUpdateCheckResult>;
+  /** Opens the app log directory in the system file manager. */
+  openLogsDirectory: () => Promise<void>;
 }
 
 interface WindowControlsContext {

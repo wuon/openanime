@@ -44,6 +44,8 @@ export function SettingsPage() {
   );
   const [streamProviderLoading, setStreamProviderLoading] = useState(true);
   const [streamProviderBusy, setStreamProviderBusy] = useState(false);
+  const [openLogsBusy, setOpenLogsBusy] = useState(false);
+  const [openLogsError, setOpenLogsError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,6 +161,18 @@ export function SettingsPage() {
       setActiveStreamProvider(next);
     } finally {
       setStreamProviderBusy(false);
+    }
+  }, []);
+
+  const onOpenLogsDirectory = useCallback(async () => {
+    setOpenLogsBusy(true);
+    setOpenLogsError(null);
+    try {
+      await window.app.openLogsDirectory();
+    } catch (error) {
+      setOpenLogsError(error instanceof Error ? error.message : "Could not open log directory.");
+    } finally {
+      setOpenLogsBusy(false);
     }
   }, []);
 
@@ -324,6 +338,32 @@ export function SettingsPage() {
           <p className="text-sm text-muted-foreground">Light, dark, or match your system.</p>
         </div>
         <ThemePicker className="sm:shrink-0" />
+      </section>
+
+      <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1 min-w-0">
+          <h2 className="text-sm font-medium">Logs</h2>
+          <p className="text-sm text-muted-foreground">
+            Open the local log folder to share when reporting issues. Logs older than 30 days are
+            removed automatically.
+          </p>
+          {openLogsError && (
+            <p className="text-sm text-destructive" role="alert">
+              {openLogsError}
+            </p>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="sm:shrink-0 w-full sm:w-auto"
+          disabled={openLogsBusy}
+          onClick={() => {
+            void onOpenLogsDirectory();
+          }}
+        >
+          {openLogsBusy ? "Opening…" : "Open"}
+        </Button>
       </section>
     </div>
   );

@@ -221,14 +221,16 @@ Provider code runs in the main process; restart the app after main-process chang
 
 ### Logging
 
-In development (`NODE_ENV !== "production"`), providers log with tagged prefixes, e.g.:
+The app uses [`electron-log`](https://www.npmjs.com/package/electron-log) (`src/main/logger.ts`). Each launch writes a new session file (e.g. `main-2026-07-12T17-36-05-123Z.log`) in the OS log directory (macOS: `~/Library/Logs/Openanime/`, Linux/Windows: under the app userData `logs/` folder). Users can open that folder from **Settings → Logs**. Files older than 30 days are deleted on startup and daily while the app runs.
+
+In development, providers still log with tagged prefixes, e.g.:
 
 - `[allanime-stream]`
 - `[animepahe-provider]`
 - `[reanime-provider]`
 - `[stream-proxy]`, `[reanime-upstream]`
 
-Follow the same pattern for new providers.
+Follow the same pattern for new providers. Prefer `console.*` / `log.*` with those tags so messages land in both the console and the log file.
 
 ### Manual test checklist
 

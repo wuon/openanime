@@ -7,7 +7,10 @@ import { type IUpdateElectronAppOptions, updateElectronApp } from "update-electr
 import { initElectronUserAgent } from "@/main/electron-user-agent";
 import { APP_PROTOCOL, completeAniListOAuthFromDeepLink } from "@/main/ipc/anilist/anilist-oauth";
 import { registerListeners, unregisterListeners } from "@/main/ipc/listeners";
+import { initLogger } from "@/main/logger";
 import { shutdownTranscodeJobs, startStreamProxy } from "@/main/stream-proxy";
+
+initLogger();
 
 if (started) {
   app.quit();
