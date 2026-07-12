@@ -8,6 +8,7 @@ import { updateAppLanguage } from "@/renderer/helpers/i18n/language-helpers";
 import { syncThemeWithLocal } from "@/renderer/helpers/theme/theme-helper";
 import { ScrollToTop } from "@/renderer/components/scroll-to-top";
 import SidebarLayout from "@/renderer/layouts/sidebar-layout";
+import { BugsPage } from "@/renderer/pages/bugs-page";
 import { HistoryPage } from "@/renderer/pages/history-page";
 import { BookmarksPage } from "@/renderer/pages/bookmarks-page";
 import { PlayerPage } from "@/renderer/pages/player-page";
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/search" element={<SearchPage />} />
           <Route path="/bookmarks" element={<BookmarksPage />} />
           <Route path="/history" element={<HistoryPage />} />
+          <Route path="/bugs" element={<BugsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/show/:id" element={<ShowDetailsPage />} />
           <Route path="/watch" element={<WatchPage />} />

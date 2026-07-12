@@ -1,4 +1,4 @@
-import { Bookmark, History, Home, type LucideIcon, Search, Settings } from "lucide-react";
+import { Bookmark, Bug, History, Home, type LucideIcon, Search, Settings } from "lucide-react";
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -35,6 +35,11 @@ const navbarItems: NavItem[] = [
     title: "History",
     href: "/history",
     icon: History,
+  },
+  {
+    title: "Bugs",
+    href: "/bugs",
+    icon: Bug,
   },
   {
     title: "Settings",

@@ -1,4 +1,5 @@
 import { AppUpdateCheckResult } from "./app-update-types";
+import type { GithubIssuesListResult } from "./github-issues-types";
 
 interface ThemeContext {
   toggle: () => Promise<boolean>;
@@ -329,6 +330,8 @@ interface AppContext {
   checkForUpdate: () => Promise<AppUpdateCheckResult>;
   /** Opens the app log directory in the system file manager. */
   openLogsDirectory: () => Promise<void>;
+  /** Lists open GitHub issues for the app repository. */
+  listGithubIssues: () => Promise<GithubIssuesListResult>;
 }
 
 interface WindowControlsContext {
