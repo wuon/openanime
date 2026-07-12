@@ -332,6 +332,8 @@ interface AppContext {
   openLogsDirectory: () => Promise<void>;
   /** Lists open GitHub issues for the app repository. */
   listGithubIssues: () => Promise<GithubIssuesListResult>;
+  /** Lists pinned GitHub issues labeled `breaking`. */
+  listPinnedGithubIssues: () => Promise<GithubIssuesListResult>;
 }
 
 interface WindowControlsContext {

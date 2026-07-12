@@ -1,5 +1,4 @@
-import { app } from "electron";
-
+import { getElectronUserAgent } from "@/main/electron-user-agent";
 import type {
   GithubIssue,
   GithubIssueLabel,
@@ -66,8 +65,7 @@ export async function listGitHubIssues(): Promise<GithubIssuesListResult> {
       `https://api.github.com/repos/${GITHUB_REPO}/issues?state=open&per_page=50&sort=updated`,
       {
         headers: {
-          Accept: "application/vnd.github+json",
-          "User-Agent": `Openanime/${app.getVersion()}`,
+          "User-Agent": getElectronUserAgent(),
         },
       }
     );

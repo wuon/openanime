@@ -1,6 +1,7 @@
 import { app } from "electron";
 import { coerce, gt, valid } from "semver";
 
+import { getElectronUserAgent } from "@/main/electron-user-agent";
 import type { AppUpdateCheckResult } from "@/shared/app-update-types";
 
 /** Matches `updateElectronApp` repo in main.ts */
@@ -27,8 +28,7 @@ export async function checkGitHubReleaseVsCurrent(): Promise<AppUpdateCheckResul
   try {
     const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
       headers: {
-        Accept: "application/vnd.github+json",
-        "User-Agent": `Openanime/${currentVersion}`,
+        "User-Agent": getElectronUserAgent(),
       },
     });
 

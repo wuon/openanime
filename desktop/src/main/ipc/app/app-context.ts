@@ -6,6 +6,7 @@ import type { GithubIssuesListResult } from "@/shared/github-issues-types";
 import {
   APP_CHECK_FOR_UPDATE_CHANNEL,
   APP_LIST_GITHUB_ISSUES_CHANNEL,
+  APP_LIST_PINNED_GITHUB_ISSUES_CHANNEL,
   APP_OPEN_LOGS_DIRECTORY_CHANNEL,
   APP_OS_CHANNEL,
   APP_VERSION_CHANNEL,
@@ -21,5 +22,7 @@ export function exposeAppContext() {
       ipcRenderer.invoke(APP_OPEN_LOGS_DIRECTORY_CHANNEL) as Promise<void>,
     listGithubIssues: () =>
       ipcRenderer.invoke(APP_LIST_GITHUB_ISSUES_CHANNEL) as Promise<GithubIssuesListResult>,
+    listPinnedGithubIssues: () =>
+      ipcRenderer.invoke(APP_LIST_PINNED_GITHUB_ISSUES_CHANNEL) as Promise<GithubIssuesListResult>,
   });
 }

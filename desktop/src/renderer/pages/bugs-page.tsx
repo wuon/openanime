@@ -172,18 +172,6 @@ export function BugsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1 min-w-0">
           <h1 className="text-4xl font-semibold tracking-tight">Bugs</h1>
-          <p className="text-sm text-muted-foreground">
-            Open issues from the{" "}
-            <button
-              type="button"
-              className="text-foreground underline-offset-4 hover:underline inline-flex items-center gap-1"
-              onClick={() => openExternalUrl(result?.issuesUrl ?? "https://github.com/wuon/openanime/issues")}
-            >
-              GitHub repository
-              <ExternalLink className="size-3.5" aria-hidden />
-            </button>
-            .
-          </p>
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:shrink-0">
