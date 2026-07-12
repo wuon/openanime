@@ -10,7 +10,7 @@ interface ThemeContext {
 
 type StreamMode = "sub" | "dub";
 
-type StreamProvider = "allanime" | "animepahe" | "animeparadise" | "reanime";
+type StreamProvider = "allanime" | "animepahe" | "animeparadise" | "reanime" | "senshi";
 
 interface Show {
   id: string;
@@ -70,6 +70,13 @@ interface Episode {
   mode: StreamMode;
 }
 
+interface StreamQualityOption {
+  id: string;
+  label: string;
+  height?: number;
+  bandwidth?: number;
+}
+
 interface StreamUrlResult {
   url: string;
   referer: string;
@@ -79,6 +86,8 @@ interface StreamUrlResult {
     format: string;
     default?: boolean;
   }>;
+  qualities?: StreamQualityOption[];
+  selectedQuality?: string;
 }
 
 interface TranscodeProgressResult {
@@ -348,9 +357,16 @@ interface StreamProviderContext {
     providerName?: StreamProvider
   ) => Promise<StreamUrlResult>;
   getStreamProxyBaseUrl: () => Promise<string>;
-  prepareTranscodedStream: (targetUrl: string, referer: string | null) => Promise<boolean>;
-  cancelTranscodedStream: (targetUrl: string) => Promise<boolean>;
-  getTranscodeProgress: (targetUrl: string) => Promise<TranscodeProgressResult>;
+  prepareTranscodedStream: (
+    targetUrl: string,
+    referer: string | null,
+    variant?: string | null
+  ) => Promise<boolean>;
+  cancelTranscodedStream: (targetUrl: string, variant?: string | null) => Promise<boolean>;
+  getTranscodeProgress: (
+    targetUrl: string,
+    variant?: string | null
+  ) => Promise<TranscodeProgressResult>;
   getShowDetails: (providerId: string, providerName?: StreamProvider) => Promise<ShowDetails>;
   getRecentUploads: (page: number, limit?: number) => Promise<Episode[]>;
 }

@@ -14,7 +14,12 @@ interface NativeStreamProviderBridge {
 function getNativeStreamProvider(
   provider: StreamProviderName
 ): NativeStreamProviderBridge | null {
-  if (provider === "animepahe" || provider === "animeparadise" || provider === "reanime") {
+  if (
+    provider === "animepahe" ||
+    provider === "animeparadise" ||
+    provider === "reanime" ||
+    provider === "senshi"
+  ) {
     return streamProviders[provider] as unknown as NativeStreamProviderBridge;
   }
   return null;

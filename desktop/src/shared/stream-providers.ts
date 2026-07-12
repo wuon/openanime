@@ -7,6 +7,7 @@ export const STREAM_PROVIDER_LABELS: Record<StreamProviderName, string> = {
   animepahe: "AnimePahe",
   animeparadise: "AnimeParadise",
   reanime: "Reanime",
+  senshi: "Senshi",
 };
 
 export const ALL_STREAM_PROVIDER_NAMES = Object.keys(

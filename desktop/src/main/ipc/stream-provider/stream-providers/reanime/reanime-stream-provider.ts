@@ -1,10 +1,24 @@
 import { getElectronUserAgent } from "@/main/electron-user-agent";
 import { Episode, ShowSearchResult } from "@/shared/types";
+import {
+  parseHlsVideoVariants,
+  pickPreferredHlsVariant,
+  sortHlsVariantsDescending,
+} from "@/shared/utils/hls-master";
 
-import { StreamMode, StreamProvider, StreamSubtitleTrack, StreamUrlResult } from "../stream-provider";
+import {
+  StreamMode,
+  StreamProvider,
+  StreamQualityOption,
+  StreamSubtitleTrack,
+  StreamUrlResult,
+} from "../stream-provider";
 import { decryptFlixcloudLink, FLIXCLOUD_REFERER } from "./flixcloud-decrypt";
 import { registerFlixcloudPlaylistKey } from "./flixcloud-playlist-crypto";
-import { prefetchReanimePlayback } from "./reanime-stream-upstream";
+import {
+  fetchReanimePlaylistText,
+  prefetchReanimePlayback,
+} from "./reanime-stream-upstream";
 
 const BASE = process.env.REANIME_BASE || "https://reanime.to";
 /** Reanime moved public REST routes under /api/v1 (old /api/* returns 404). */
@@ -393,7 +407,31 @@ export class ReanimeStreamProvider implements StreamProvider {
       try {
         const decrypted = await decryptFlixcloudLink(dataLink, { referer: `${BASE}/` });
         registerFlixcloudPlaylistKey(decrypted.url, decrypted.playlistKey);
-        // Warm playlists + segment CDN while the UI prepares transcode.
+
+        let qualities: StreamQualityOption[] | undefined;
+        let selectedQuality: string | undefined;
+        try {
+          const master = await fetchReanimePlaylistText(decrypted.url, FLIXCLOUD_REFERER);
+          const variants = parseHlsVideoVariants(master);
+          if (variants.length > 0) {
+            const preferred = pickPreferredHlsVariant(variants, 720);
+            qualities = sortHlsVariantsDescending(variants).map((v) => ({
+              id: v.uri,
+              label: v.label,
+              height: v.height ?? undefined,
+              bandwidth: v.bandwidth ?? undefined,
+            }));
+            selectedQuality = preferred?.uri;
+          }
+        } catch (qualityError: unknown) {
+          this.log("stream:qualities-failed", {
+            serverName: server.serverName,
+            error: qualityError instanceof Error ? qualityError.message : String(qualityError),
+          });
+        }
+
+        // Warm remaining child playlists + segment CDN while the UI prepares transcode.
+        // Master is already cached from the qualities fetch above.
         void prefetchReanimePlayback(decrypted.url, FLIXCLOUD_REFERER);
         this.log("stream:done", {
           providerId,
@@ -401,6 +439,8 @@ export class ReanimeStreamProvider implements StreamProvider {
           mode,
           serverName: server.serverName,
           urlPreview: decrypted.url.slice(0, 96),
+          qualities: qualities?.map((q) => q.label) ?? null,
+          selectedQuality: selectedQuality ?? null,
           ms: Date.now() - startedAt,
           attemptMs: Date.now() - attemptStartedAt,
         });
@@ -409,6 +449,8 @@ export class ReanimeStreamProvider implements StreamProvider {
           // fetch1.flixcloud.cc rejects embed-page referers (cross-subdomain); use site root.
           referer: FLIXCLOUD_REFERER,
           subtitles: normalizeFlixcloudSubtitles(decrypted.subtitles),
+          qualities,
+          selectedQuality,
         };
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "unknown error";

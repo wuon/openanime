@@ -34,6 +34,7 @@ import { URL } from "url";
 import { getElectronUserAgent } from "@/main/electron-user-agent";
 import { fetchUpstream, normalizeStreamReferer } from "@/main/stream-proxy-upstream";
 import { convertAssToWebVtt, isAssSubtitleUrl } from "@/main/utils/ass-to-webvtt";
+import { filterHlsMasterToVariant } from "@/shared/utils/hls-master";
 import { isHlsPlaylistUrl } from "@/shared/utils/hls-url";
 
 let server: http.Server | null = null;
@@ -164,7 +165,8 @@ export function getStreamProxyBaseUrl(): string {
 export async function prepareTranscodedStream(
   inputUrl: string,
   targetUrl: string,
-  referer: string | null
+  referer: string | null,
+  variant: string | null = null
 ): Promise<void> {
   if (!resolvedFfmpegPath) {
     resolvedFfmpegPath = resolveFfmpegPath();
@@ -172,7 +174,7 @@ export async function prepareTranscodedStream(
   if (!resolvedFfmpegPath) {
     throw new Error("ffmpeg binary unavailable");
   }
-  const session = await ensureHlsSession(inputUrl, targetUrl, referer);
+  const session = await ensureHlsSession(inputUrl, targetUrl, referer, variant);
   await waitForFirstTranscodeSegment(session);
 }
 
@@ -209,8 +211,11 @@ async function waitForFirstTranscodeSegment(session: HlsSession): Promise<void> 
   }
 }
 
-export function getTranscodeProgress(targetUrl: string): TranscodeProgressSnapshot {
-  const key = getTranscodeCacheKey(targetUrl);
+export function getTranscodeProgress(
+  targetUrl: string,
+  variant: string | null = null
+): TranscodeProgressSnapshot {
+  const key = getTranscodeCacheKey(targetUrl, variant);
   const existing = transcodeProgress.get(key);
   if (existing) return existing;
   return { state: "idle", progressPercent: null, message: "Waiting to start..." };
@@ -227,8 +232,8 @@ export function shutdownTranscodeJobs(): void {
  * Stop the background transcoder for a stream (e.g. user left the watch page).
  * Without this, ffmpeg keeps pulling CDN segments after playback ends.
  */
-export function cancelTranscodedStream(targetUrl: string): void {
-  const key = getTranscodeCacheKey(targetUrl);
+export function cancelTranscodedStream(targetUrl: string, variant: string | null = null): void {
+  const key = getTranscodeCacheKey(targetUrl, variant);
   const session = hlsSessions.get(key);
   if (!session) {
     transcodeProgress.set(key, {
@@ -306,6 +311,7 @@ function handleStreamRequest(req: IncomingMessage, res: ServerResponse): void {
 function handleStreamPassthrough(req: IncomingMessage, res: ServerResponse, parsed: URL): void {
   const targetUrl = parsed.searchParams.get("url");
   const rawReferer = parsed.searchParams.get("referer");
+  const variant = parsed.searchParams.get("variant");
   const referer = targetUrl ? normalizeStreamReferer(targetUrl, rawReferer) : rawReferer;
 
   if (!targetUrl) {
@@ -365,7 +371,7 @@ function handleStreamPassthrough(req: IncomingMessage, res: ServerResponse, pars
         status < 400 &&
         isHlsManifestResponse(targetUrl, fetchRes.headers.get("content-type"))
       ) {
-        const manifestBody = await fetchRes.text();
+        let manifestBody = await fetchRes.text();
         if (!manifestBody.trimStart().startsWith("#EXTM3U")) {
           if (IS_DEV) {
             console.warn("[stream-proxy] playlist response missing #EXTM3U", {
@@ -376,6 +382,18 @@ function handleStreamPassthrough(req: IncomingMessage, res: ServerResponse, pars
           res.writeHead(502);
           res.end("Upstream playlist was not valid HLS");
           return;
+        }
+        // Collapse multi-rendition masters to one video quality (+ shared AUDIO/SUBS).
+        // Always filter — without this ffmpeg probes every STREAM-INF and bursts CF.
+        if (manifestBody.includes("#EXT-X-STREAM-INF")) {
+          const before = manifestBody;
+          manifestBody = filterHlsMasterToVariant(manifestBody, variant?.trim() || null);
+          if (IS_DEV && before !== manifestBody) {
+            console.info("[stream-proxy] filtered HLS master to single variant", {
+              variant: variant?.trim() || "(auto)",
+              targetUrl: targetUrl.slice(0, 96),
+            });
+          }
         }
         const rewrittenBody = rewriteHlsManifest(
           manifestBody,
@@ -444,6 +462,7 @@ async function handleTranscodeRoute(
 ): Promise<void> {
   const targetUrl = parsed.searchParams.get("url");
   const rawReferer = parsed.searchParams.get("referer");
+  const variant = parsed.searchParams.get("variant");
   const referer = targetUrl ? normalizeStreamReferer(targetUrl, rawReferer) : rawReferer;
 
   if (!targetUrl) {
@@ -455,14 +474,14 @@ async function handleTranscodeRoute(
   const subpath = parsed.pathname.slice("/transcode/".length);
 
   if (subpath === "playlist.m3u8") {
-    await handlePlaylistRequest(req, res, targetUrl, referer);
+    await handlePlaylistRequest(req, res, targetUrl, referer, variant);
     return;
   }
 
   const segMatch = /^segment-(\d+)\.ts$/.exec(subpath);
   if (segMatch) {
     const segIdx = Number(segMatch[1]);
-    await handleSegmentRequest(req, res, targetUrl, referer, segIdx);
+    await handleSegmentRequest(req, res, targetUrl, referer, segIdx, variant);
     return;
   }
 
@@ -474,12 +493,13 @@ async function handlePlaylistRequest(
   req: IncomingMessage,
   res: ServerResponse,
   targetUrl: string,
-  referer: string | null
+  referer: string | null,
+  variant: string | null
 ): Promise<void> {
-  const inputUrl = buildLocalProxyInputUrl(targetUrl, referer);
-  const session = await ensureHlsSession(inputUrl, targetUrl, referer);
+  const inputUrl = buildLocalProxyInputUrl(targetUrl, referer, variant);
+  const session = await ensureHlsSession(inputUrl, targetUrl, referer, variant);
 
-  const body = buildVodPlaylist(session, targetUrl, referer);
+  const body = buildVodPlaylist(session, targetUrl, referer, variant);
   res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.writeHead(200);
@@ -491,10 +511,11 @@ async function handleSegmentRequest(
   res: ServerResponse,
   targetUrl: string,
   referer: string | null,
-  segIdx: number
+  segIdx: number,
+  variant: string | null
 ): Promise<void> {
-  const inputUrl = buildLocalProxyInputUrl(targetUrl, referer);
-  const session = await ensureHlsSession(inputUrl, targetUrl, referer);
+  const inputUrl = buildLocalProxyInputUrl(targetUrl, referer, variant);
+  const session = await ensureHlsSession(inputUrl, targetUrl, referer, variant);
 
   if (segIdx < 0 || segIdx >= session.segmentCount) {
     res.writeHead(404);
@@ -534,13 +555,26 @@ async function handleSegmentRequest(
   }
 }
 
-function buildLocalProxyInputUrl(targetUrl: string, referer: string | null): string {
+function buildLocalProxyInputUrl(
+  targetUrl: string,
+  referer: string | null,
+  variant: string | null = null
+): string {
   // Use a .m3u8 path so ffmpeg's HLS demuxer accepts the proxied playlist.
-  return `${getStreamProxyBaseUrl()}/stream/playlist.m3u8?url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(referer ?? "")}`;
+  const variantQuery =
+    variant && variant.trim() ? `&variant=${encodeURIComponent(variant.trim())}` : "";
+  return `${getStreamProxyBaseUrl()}/stream/playlist.m3u8?url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(referer ?? "")}${variantQuery}`;
 }
 
-function buildVodPlaylist(session: HlsSession, targetUrl: string, referer: string | null): string {
-  const baseQuery = `url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(referer ?? "")}`;
+function buildVodPlaylist(
+  session: HlsSession,
+  targetUrl: string,
+  referer: string | null,
+  variant: string | null
+): string {
+  const variantQuery =
+    variant && variant.trim() ? `&variant=${encodeURIComponent(variant.trim())}` : "";
+  const baseQuery = `url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(referer ?? "")}${variantQuery}`;
   const base = getStreamProxyBaseUrl();
   const segCount = session.segmentCount;
   const targetDuration = Math.max(1, Math.ceil(HLS_SEGMENT_DURATION_SECONDS));
@@ -571,9 +605,10 @@ function buildVodPlaylist(session: HlsSession, targetUrl: string, referer: strin
 async function ensureHlsSession(
   inputUrl: string,
   targetUrl: string,
-  referer: string | null
+  referer: string | null,
+  variant: string | null = null
 ): Promise<HlsSession> {
-  const key = getTranscodeCacheKey(targetUrl);
+  const key = getTranscodeCacheKey(targetUrl, variant);
   const existing = hlsSessions.get(key);
   if (existing) return existing;
 
@@ -658,6 +693,7 @@ async function ensureHlsSession(
         durationSeconds: duration,
         segmentCount,
         existingOnDisk: segmentsAvailable.size,
+        variant: variant ?? null,
       });
     }
 
@@ -780,10 +816,15 @@ function probeDurationSeconds(inputUrl: string): Promise<number> {
   });
 }
 
+/** Bound playlist-based duration probe so a stalled upstream can't freeze prepare forever. */
+const PLAYLIST_PROBE_TIMEOUT_MS = 20_000;
+
 /** Sum #EXTINF from an HLS media playlist (follow master → first video variant). */
 async function probeDurationFromHlsPlaylist(playlistUrl: string): Promise<number | null> {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), PLAYLIST_PROBE_TIMEOUT_MS);
   try {
-    const masterRes = await fetch(playlistUrl);
+    const masterRes = await fetch(playlistUrl, { signal: ac.signal });
     if (!masterRes.ok) return null;
     let text = await masterRes.text();
     if (!text.trimStart().startsWith("#EXTM3U")) return null;
@@ -791,7 +832,7 @@ async function probeDurationFromHlsPlaylist(playlistUrl: string): Promise<number
     if (text.includes("#EXT-X-STREAM-INF")) {
       const mediaUrl = pickFirstVariantPlaylistUrl(text, playlistUrl);
       if (!mediaUrl) return null;
-      const mediaRes = await fetch(mediaUrl);
+      const mediaRes = await fetch(mediaUrl, { signal: ac.signal });
       if (!mediaRes.ok) return null;
       text = await mediaRes.text();
       if (!text.trimStart().startsWith("#EXTM3U")) return null;
@@ -811,6 +852,8 @@ async function probeDurationFromHlsPlaylist(playlistUrl: string): Promise<number
     return total;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -1369,8 +1412,10 @@ function parseByteRange(
   return { start, end };
 }
 
-function getTranscodeCacheKey(targetUrl: string): string {
-  return createHash("sha1").update(targetUrl).digest("hex");
+function getTranscodeCacheKey(targetUrl: string, variant: string | null = null): string {
+  const material =
+    variant && variant.trim() ? `${targetUrl}\nvariant=${variant.trim()}` : targetUrl;
+  return createHash("sha1").update(material).digest("hex");
 }
 
 function resolveFfmpegPath(): string | null {

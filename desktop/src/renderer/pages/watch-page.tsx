@@ -100,12 +100,6 @@ interface WatchState {
   providerOverride?: HistoryEntry["provider"];
 }
 
-interface TranscodeProgressInfo {
-  state: "idle" | "running" | "done" | "error";
-  progressPercent: number | null;
-  message: string;
-}
-
 export function WatchPage() {
   const location = useLocation();
   const goBack = useGoBack();
@@ -121,6 +115,10 @@ export function WatchPage() {
   /** Bumps when a new stream URL is ready so the <video> remounts (retry after errors). */
   const [streamRevision, setStreamRevision] = useState(0);
   const [subtitleTracks, setSubtitleTracks] = useState<PlayerSubtitleTrack[]>([]);
+  const [streamQualities, setStreamQualities] = useState<
+    Array<{ id: string; label: string; height?: number; bandwidth?: number }>
+  >([]);
+  const [selectedQuality, setSelectedQuality] = useState<string | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [loadingEpisode, setLoadingEpisode] = useState(false);
   const [transcodeProgress, setTranscodeProgress] = useState<{
@@ -161,6 +159,8 @@ export function WatchPage() {
   const lastHistoryEntryRef = useRef<HistoryEntry | null>(null);
   /** Upstream stream URL currently being transcoded (for cancel-on-exit). */
   const activeTranscodeUrlRef = useRef<string | null>(null);
+  const activeTranscodeVariantRef = useRef<string | null>(null);
+  const activeStreamRef = useRef<{ url: string; referer: string } | null>(null);
   /** Seconds to seek to after the next successful load (set before reload). */
   const resumeAfterLoadRef = useRef<number | null>(null);
   /** Last known position when playback failed (for manual retry after overlay). */
@@ -300,33 +300,44 @@ export function WatchPage() {
       setError(null);
       setPlaybackError(null);
       setSubtitleTracks([]);
+      setStreamQualities([]);
+      setSelectedQuality(null);
+      activeStreamRef.current = null;
       const previousTranscodeUrl = activeTranscodeUrlRef.current;
+      const previousTranscodeVariant = activeTranscodeVariantRef.current;
       if (previousTranscodeUrl) {
         activeTranscodeUrlRef.current = null;
-        void window.streamProvider.cancelTranscodedStream(previousTranscodeUrl);
+        activeTranscodeVariantRef.current = null;
+        void window.streamProvider.cancelTranscodedStream(
+          previousTranscodeUrl,
+          previousTranscodeVariant
+        );
       }
       try {
-        const { url, referer, subtitles } = await window.streamProvider.getStreamUrl(
-          episode.id,
-          episode.providerId,
-          ep,
-          episode.mode,
-          streamProviderOverride
-        );
+        const { url, referer, subtitles, qualities, selectedQuality: defaultQuality } =
+          await window.streamProvider.getStreamUrl(
+            episode.id,
+            episode.providerId,
+            ep,
+            episode.mode,
+            streamProviderOverride
+          );
         historyProviderRef.current =
           streamProviderOverride ?? (await window.streamProvider.getActiveProvider());
         const base = await window.streamProvider.getStreamProxyBaseUrl();
         setSubtitleTracks(proxySubtitleTracks(base, referer, subtitles));
+        const qualityOptions = qualities ?? [];
+        const variant =
+          (defaultQuality && qualityOptions.some((q) => q.id === defaultQuality)
+            ? defaultQuality
+            : qualityOptions[0]?.id) ?? null;
+        setStreamQualities(qualityOptions);
+        setSelectedQuality(variant);
+        activeStreamRef.current = { url, referer };
         const shouldTranscode = shouldUseServerTranscode(url);
         if (shouldTranscode) {
-          const streamProvider = window.streamProvider as {
-            getTranscodeProgress: (targetUrl: string) => Promise<TranscodeProgressInfo>;
-            prepareTranscodedStream: (
-              targetUrl: string,
-              streamReferer: string | null
-            ) => Promise<boolean>;
-          };
           activeTranscodeUrlRef.current = url;
+          activeTranscodeVariantRef.current = variant;
           setTranscodeProgress({
             active: true,
             progressPercent: 0,
@@ -336,7 +347,7 @@ export function WatchPage() {
           let stopPolling = false;
           const pollProgress = async () => {
             try {
-              const next = await streamProvider.getTranscodeProgress(url);
+              const next = await window.streamProvider.getTranscodeProgress(url, variant);
               if (stopPolling || activeLoadTokenRef.current !== loadToken) return;
               setTranscodeProgress({
                 active: next.state === "running" || next.state === "idle",
@@ -353,7 +364,7 @@ export function WatchPage() {
             void pollProgress();
           }, 500);
           try {
-            await streamProvider.prepareTranscodedStream(url, referer);
+            await window.streamProvider.prepareTranscodedStream(url, referer, variant);
           } finally {
             stopPolling = true;
             clearInterval(progressInterval);
@@ -361,7 +372,8 @@ export function WatchPage() {
           if (activeLoadTokenRef.current !== loadToken) {
             if (activeTranscodeUrlRef.current === url) {
               activeTranscodeUrlRef.current = null;
-              void window.streamProvider.cancelTranscodedStream(url);
+              activeTranscodeVariantRef.current = null;
+              void window.streamProvider.cancelTranscodedStream(url, variant);
             }
             return;
           }
@@ -372,10 +384,12 @@ export function WatchPage() {
           });
         }
 
+        const variantQuery =
+          variant && variant.trim() ? `&variant=${encodeURIComponent(variant.trim())}` : "";
         const urlWithProxy = shouldTranscode
-          ? `${base}/transcode/playlist.m3u8?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`
+          ? `${base}/transcode/playlist.m3u8?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}${variantQuery}`
           : isHlsPlaylistUrl(url)
-            ? `${base}/stream/playlist.m3u8?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`
+            ? `${base}/stream/playlist.m3u8?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}${variantQuery}`
             : `${base}/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
         if (activeLoadTokenRef.current !== loadToken) return;
         setPlayUrl(urlWithProxy);
@@ -512,9 +526,11 @@ export function WatchPage() {
       clearReconnectTimeout();
       activeLoadTokenRef.current += 1;
       const transcodeUrl = activeTranscodeUrlRef.current;
+      const transcodeVariant = activeTranscodeVariantRef.current;
       activeTranscodeUrlRef.current = null;
+      activeTranscodeVariantRef.current = null;
       if (transcodeUrl) {
-        void window.streamProvider.cancelTranscodedStream(transcodeUrl);
+        void window.streamProvider.cancelTranscodedStream(transcodeUrl, transcodeVariant);
       }
     };
   }, [clearReconnectTimeout]);
@@ -529,6 +545,75 @@ export function WatchPage() {
       })();
     },
     [loadStream, syncHistoryProgress]
+  );
+
+  const onQualitySelect = useCallback(
+    (qualityId: string) => {
+      const stream = activeStreamRef.current;
+      if (!stream || !qualityId || qualityId === selectedQuality) return;
+
+      void (async () => {
+        activeLoadTokenRef.current += 1;
+        const loadToken = activeLoadTokenRef.current;
+        const resumeFrom = videoRef.current?.currentTime;
+        if (resumeFrom != null && resumeFrom > 0) {
+          resumeAfterLoadRef.current = resumeFrom;
+        }
+
+        const previousUrl = activeTranscodeUrlRef.current;
+        const previousVariant = activeTranscodeVariantRef.current;
+        if (previousUrl) {
+          activeTranscodeUrlRef.current = null;
+          activeTranscodeVariantRef.current = null;
+          void window.streamProvider.cancelTranscodedStream(previousUrl, previousVariant);
+        }
+
+        setSelectedQuality(qualityId);
+        setLoadingEpisode(true);
+        setPlaybackError(null);
+        setError(null);
+        setPlayUrl("");
+
+        try {
+          const { url, referer } = stream;
+          const base = await window.streamProvider.getStreamProxyBaseUrl();
+          const shouldTranscode = shouldUseServerTranscode(url);
+          if (shouldTranscode) {
+            activeTranscodeUrlRef.current = url;
+            activeTranscodeVariantRef.current = qualityId;
+            setTranscodeProgress({
+              active: true,
+              progressPercent: 0,
+              message: "Switching quality...",
+            });
+            await window.streamProvider.prepareTranscodedStream(url, referer, qualityId);
+            if (activeLoadTokenRef.current !== loadToken) return;
+            setTranscodeProgress({
+              active: false,
+              progressPercent: 100,
+              message: "Ready to play",
+            });
+          }
+
+          const variantQuery = `&variant=${encodeURIComponent(qualityId)}`;
+          const urlWithProxy = shouldTranscode
+            ? `${base}/transcode/playlist.m3u8?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}${variantQuery}`
+            : `${base}/stream/playlist.m3u8?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}${variantQuery}`;
+          if (activeLoadTokenRef.current !== loadToken) return;
+          setPlayUrl(urlWithProxy);
+          setStreamRevision((r) => r + 1);
+        } catch (err) {
+          if (activeLoadTokenRef.current !== loadToken) return;
+          setError(err instanceof Error ? err.message : "Failed to switch quality");
+        } finally {
+          if (activeLoadTokenRef.current === loadToken) {
+            setLoadingEpisode(false);
+            setTranscodeProgress(null);
+          }
+        }
+      })();
+    },
+    [selectedQuality]
   );
 
   const retryStream = useCallback(() => {
@@ -677,8 +762,11 @@ export function WatchPage() {
       episodes={episodes}
       videoRef={videoRef}
       subtitleTracks={subtitleTracks}
+      streamQualities={streamQualities}
+      selectedQuality={selectedQuality}
       onBack={goBack}
       onEpisodeSelect={onEpisodeSelect}
+      onQualitySelect={onQualitySelect}
       onRetryStream={retryStream}
       onLoadedMetadata={handleVideoLoadedMetadata}
       onPause={handleVideoPause}

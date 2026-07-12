@@ -26,6 +26,13 @@ export interface StreamUrlResult {
     format: string;
     default?: boolean;
   }>;
+  qualities?: Array<{
+    id: string;
+    label: string;
+    height?: number;
+    bandwidth?: number;
+  }>;
+  selectedQuality?: string;
 }
 
 export interface TranscodeProgressResult {
@@ -71,21 +78,28 @@ export function exposeStreamProviderContext() {
       ) as Promise<StreamUrlResult>,
     getStreamProxyBaseUrl: () =>
       ipcRenderer.invoke(STREAM_PROVIDER_STREAM_PROXY_BASE_CHANNEL) as Promise<string>,
-    prepareTranscodedStream: (targetUrl: string, referer: string | null) =>
+    prepareTranscodedStream: (
+      targetUrl: string,
+      referer: string | null,
+      variant?: string | null
+    ) =>
       ipcRenderer.invoke(
         STREAM_PROVIDER_PREPARE_TRANSCODE_CHANNEL as string,
         targetUrl,
-        referer
+        referer,
+        variant ?? null
       ) as Promise<boolean>,
-    cancelTranscodedStream: (targetUrl: string) =>
+    cancelTranscodedStream: (targetUrl: string, variant?: string | null) =>
       ipcRenderer.invoke(
         STREAM_PROVIDER_CANCEL_TRANSCODE_CHANNEL as string,
-        targetUrl
+        targetUrl,
+        variant ?? null
       ) as Promise<boolean>,
-    getTranscodeProgress: (targetUrl: string) =>
+    getTranscodeProgress: (targetUrl: string, variant?: string | null) =>
       ipcRenderer.invoke(
         STREAM_PROVIDER_TRANSCODE_PROGRESS_CHANNEL as string,
-        targetUrl
+        targetUrl,
+        variant ?? null
       ) as Promise<TranscodeProgressResult>,
     getShowDetails: (providerId: string, providerName?: StreamProviderName) =>
       ipcRenderer.invoke(

@@ -79,15 +79,6 @@ Search results and episodes should populate both `id` and `providerId` on `ShowS
 
 Ship-time toggles live in `src/shared/stream-providers.config.ts`. Set a provider to `false` to hide it from Settings and route all IPC calls (including watch-history overrides) to the first enabled provider instead.
 
-```ts
-export const streamProviderAvailability = {
-  allanime: true,
-  animepahe: true,
-  animeparadise: false, // temporarily disabled
-  reanime: true,
-} as const;
-```
-
 At least one provider must stay enabled or startup will throw. Labels and helper functions live in `src/shared/stream-providers.ts`.
 
 ---
@@ -96,13 +87,13 @@ At least one provider must stay enabled or startup will throw. Labels and helper
 
 `StreamProviderName` is derived from `stream-providers.config.ts`. When adding a provider (e.g. `myprovider`), update **all** of:
 
-| File                                   | Change                                                        |
-| -------------------------------------- | ------------------------------------------------------------- |
-| `src/shared/stream-providers.config.ts`| Add provider id set to `true`                                 |
-| `src/shared/stream-providers.ts`       | Add display label in `STREAM_PROVIDER_LABELS`               |
-| `stream-providers/stream-provider.ts`  | Import class, add registry entry                              |
-| `src/shared/types.d.ts`                | Extend `StreamProvider` union                                 |
-| `src/main/store.ts`                    | Extend `"stream.provider"` schema                             |
+| File                                    | Change                                        |
+| --------------------------------------- | --------------------------------------------- |
+| `src/shared/stream-providers.config.ts` | Add provider id set to `true`                 |
+| `src/shared/stream-providers.ts`        | Add display label in `STREAM_PROVIDER_LABELS` |
+| `stream-providers/stream-provider.ts`   | Import class, add registry entry              |
+| `src/shared/types.d.ts`                 | Extend `StreamProvider` union                 |
+| `src/main/store.ts`                     | Extend `"stream.provider"` schema             |
 
 Optional, depending on your integration:
 
@@ -137,6 +128,7 @@ Three reference implementations cover most approaches:
 | **AllAnime**  | GraphQL + embed resolution                      | `allanime/allanime-stream-provider.ts`, `allanime/allanime-gql.ts` |
 | **AnimePahe** | HTML/API scrape + hidden browser for challenges | `animepahe-stream-provider.ts`                                     |
 | **Reanime**   | REST API + Flixcloud decrypt + proxy upstream   | `reanime/reanime-stream-provider.ts`, `reanime/flixcloud-*.ts`     |
+| **Senshi**    | REST API → HLS (MAL-keyed)                      | `senshi/senshi-stream-provider.ts`, `anilist/anilist-mal.ts`       |
 
 ### REST / JSON API
 

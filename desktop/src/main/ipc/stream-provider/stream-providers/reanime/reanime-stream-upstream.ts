@@ -314,6 +314,37 @@ function collectHlsUris(manifest: string, baseUrl: string): string[] {
 }
 
 /**
+ * Fetch + decrypt a Flixcloud HLS playlist body (master or media).
+ * Requires `registerFlixcloudPlaylistKey` for the stream URL first.
+ */
+export async function fetchReanimePlaylistText(
+  playlistUrl: string,
+  referer: string | null = FLIXCLOUD_REFERER
+): Promise<string> {
+  const effectiveReferer = (referer?.trim() || FLIXCLOUD_REFERER).trim();
+  const headers: Record<string, string> = {
+    "User-Agent": getElectronUserAgent(),
+    Referer: effectiveReferer,
+    Accept: "*/*",
+  };
+
+  const response = await fetchReanimeUpstream({
+    targetUrl: playlistUrl,
+    referer: effectiveReferer,
+    headers,
+    signal: AbortSignal.timeout(45_000),
+  });
+  if (!response.ok) {
+    throw new Error(`Reanime playlist fetch failed (${response.status})`);
+  }
+  const text = await response.text();
+  if (!text.trimStart().startsWith("#EXTM3U")) {
+    throw new Error("Reanime playlist was not valid HLS after decrypt");
+  }
+  return text;
+}
+
+/**
  * Prefetch master + child playlists and warm segment CDN origins so the first
  * ffmpeg/transcode pass does not pay cold-start latency on the critical path.
  */
@@ -335,15 +366,10 @@ export async function prefetchReanimePlayback(
 
     await ensureFlixcloudBrowserReady().catch(() => undefined);
 
-    const masterRes = await fetchReanimeUpstream({
-      targetUrl: masterUrl,
-      referer: effectiveReferer,
-      headers,
-      signal: AbortSignal.timeout(45_000),
-    });
-    if (!masterRes.ok) return;
-    const masterText = await masterRes.text();
-    if (!masterText.trimStart().startsWith("#EXTM3U")) return;
+    const masterText = await fetchReanimePlaylistText(masterUrl, effectiveReferer).catch(
+      () => null
+    );
+    if (!masterText) return;
 
     const childUrls = collectHlsUris(masterText, masterUrl).filter((url) => isHlsPlaylistUrl(url));
     const childBodies = await Promise.all(

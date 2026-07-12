@@ -51,8 +51,11 @@ interface WatchVideoPlayerShellProps {
   episodes: EpisodeOption[];
   videoRef: React.RefObject<HTMLVideoElement>;
   subtitleTracks?: PlayerSubtitleTrack[];
+  streamQualities?: Array<{ id: string; label: string }>;
+  selectedQuality?: string | null;
   onBack: () => void;
   onEpisodeSelect: (episode: string) => void;
+  onQualitySelect?: (qualityId: string) => void;
   onRetryStream: () => void;
   onLoadedMetadata: React.ReactEventHandler<HTMLVideoElement>;
   onPause: React.ReactEventHandler<HTMLVideoElement>;
@@ -77,8 +80,11 @@ export function WatchVideoPlayerShell({
   episodes,
   videoRef,
   subtitleTracks,
+  streamQualities,
+  selectedQuality,
   onBack,
   onEpisodeSelect,
+  onQualitySelect,
   onRetryStream,
   onLoadedMetadata,
   onPause,
@@ -92,6 +98,7 @@ export function WatchVideoPlayerShell({
   const [isTopChromeHovered, setIsTopChromeHovered] = useState(false);
   const [isEpisodeSelectOpen, setIsEpisodeSelectOpen] = useState(false);
   const [isSubtitleSelectOpen, setIsSubtitleSelectOpen] = useState(false);
+  const [isQualitySelectOpen, setIsQualitySelectOpen] = useState(false);
   const [activeSubtitleLabel, setActiveSubtitleLabel] = useState<string | null>(null);
 
   useEffect(() => {
@@ -214,7 +221,8 @@ export function WatchVideoPlayerShell({
     arePlayerControlsVisible ||
     isTopChromeHovered ||
     isEpisodeSelectOpen ||
-    isSubtitleSelectOpen;
+    isSubtitleSelectOpen ||
+    isQualitySelectOpen;
 
   return (
     <div
@@ -340,6 +348,29 @@ export function WatchVideoPlayerShell({
         ) : null}
 
         <div className="flex items-center gap-2 shrink-0">
+          {streamQualities && streamQualities.length > 1 && onQualitySelect ? (
+            <Select
+              value={selectedQuality ?? streamQualities[0]?.id}
+              onValueChange={onQualitySelect}
+              onOpenChange={setIsQualitySelectOpen}
+              disabled={loadingEpisode || !playUrl}
+            >
+              <SelectTrigger className={watchSubtitleSelectTriggerClass}>
+                <SelectValue placeholder="Quality" />
+              </SelectTrigger>
+              <SelectContent className={watchEpisodeSelectContentClass}>
+                {streamQualities.map((quality) => (
+                  <SelectItem
+                    key={quality.id}
+                    value={quality.id}
+                    className={watchEpisodeSelectItemClass}
+                  >
+                    {quality.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
           {subtitleTracks && subtitleTracks.length > 0 ? (
             <Select
               value={activeSubtitleLabel ?? SUBTITLES_OFF_VALUE}
