@@ -24,6 +24,7 @@ import {
   STREAM_PROVIDER_STREAM_URL_CHANNEL,
   STREAM_PROVIDER_TRANSCODE_PROGRESS_CHANNEL,
 } from "./stream-provider-channels";
+import { refreshAaCrypto } from "./stream-providers/allanime/allanime-gql";
 import { reanimeStreamUpstreamHandler } from "./stream-providers/reanime/reanime-stream-upstream";
 import { senshiStreamUpstreamHandler } from "./stream-providers/senshi/senshi-stream-upstream";
 import { StreamProviderName, streamProviders } from "./stream-providers/stream-provider";
@@ -41,10 +42,17 @@ function setActiveStreamProviderName(provider: StreamProviderName): StreamProvid
   return resolved;
 }
 
+function warmAllAnimeCryptoIfActive(provider: StreamProviderName): void {
+  if (provider !== "allanime") return;
+  void refreshAaCrypto();
+}
+
 export function addStreamProviderListeners() {
   ipcMain.handle(STREAM_PROVIDER_ACTIVE_GET_CHANNEL, () => getActiveStreamProviderName());
   ipcMain.handle(STREAM_PROVIDER_ACTIVE_SET_CHANNEL, (_event, provider: StreamProviderName) => {
-    return setActiveStreamProviderName(provider);
+    const resolved = setActiveStreamProviderName(provider);
+    warmAllAnimeCryptoIfActive(resolved);
+    return resolved;
   });
   ipcMain.handle(STREAM_PROVIDER_SEARCH_CHANNEL, (_event, query: string) => {
     const providerName = getActiveStreamProviderName();
@@ -120,4 +128,5 @@ export function addStreamProviderListeners() {
   if (storedProvider !== resolvedProvider) {
     appStore.set("stream.provider", resolvedProvider);
   }
+  warmAllAnimeCryptoIfActive(resolvedProvider);
 }

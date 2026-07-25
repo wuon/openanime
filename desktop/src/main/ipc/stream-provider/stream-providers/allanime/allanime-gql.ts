@@ -3,6 +3,8 @@ import { createCipheriv, createDecipheriv, createHash } from "crypto";
 import { getElectronUserAgent } from "@/main/electron-user-agent";
 
 export const ALLANIME_REFERER = "https://youtu-chan.com";
+// anipy-cli uses mkissa as Origin on the episode source GET (aaReq path).
+const ALLANIME_ORIGIN = "https://mkissa.to";
 
 const ALLANIME_BASE = "allanime.day";
 export const ALLANIME_API = `https://api.${ALLANIME_BASE}`;
@@ -22,6 +24,11 @@ const FALLBACK_EPOCH = 4128;
 const FALLBACK_BUILD_ID = "19";
 const FALLBACK_MASK = "bb8080c5940a4ea9be1f7b893eb3e9794b7af13674cce8b1ae4992481b4ba1b8";
 const FALLBACK_PART_B = "SVtSJQv/t+/zw7e4KL4gdyfKDe92l52fuMIAObotBWs=";
+// Persisted-query SHA-256 for the episode embed query (ani-cli legacy hash).
+const FALLBACK_EPISODE_QUERY_HASH =
+  "d405d0edd690624b66baba3068e0edc3ac90f1597d898a1ec8db4e5c43c00fec";
+const FALLBACK_EPISODE_QUERY =
+  "query ($showId: String!, $translationType: VaildTranslationTypeEnumType!, $episodeString: String!) { episode( showId: $showId translationType: $translationType episodeString: $episodeString ) { episodeString sourceUrls } }";
 
 // Site still accepts (and currently encrypts tobeparsed with) the legacy
 // static key as a decrypt fallback when the XOR key fails auth.
@@ -34,6 +41,8 @@ type AaCrypto = {
   buildId: string;
   key: Buffer;
   mask: string;
+  queryHash: string;
+  episodeQuery: string;
 };
 
 let cryptoCache: AaCrypto | null = null;
@@ -61,6 +70,50 @@ async function fetchText(url: string): Promise<string> {
   return res.text();
 }
 
+/**
+ * Port of anipy-cli keygen.py `source_query_hash`: reconstruct the episode
+ * sourceUrls GraphQL query from CDN chunk template literals and SHA-256 it.
+ */
+function sourceQueryFromChunk(chunkJs: string): { query: string; hash: string } | null {
+  const templates = [...chunkJs.matchAll(/(\nquery\([^`]*)`/g)].map((m) => m[1]!);
+  const template = templates.find((t) => t.includes("sourceUrls") && t.includes("episode("));
+  if (!template) return null;
+
+  const resolve = (tmpl: string, depth = 0): string => {
+    if (depth > 6) return tmpl;
+    let resolved = tmpl;
+    const interpolators = [...tmpl.matchAll(/\$\{([^}]+)\}/g)].map((m) => m[1]!);
+    for (const interpolator of interpolators) {
+      let repl = "";
+      if (interpolator.endsWith("()")) {
+        // helper = e => e ? `...` : `...`
+        const fnName = interpolator.slice(0, -2);
+        const fn = chunkJs.match(
+          new RegExp(
+            `\\b${escapeRegExp(fnName)}\\s*=\\s*\\w+\\s*=>\\s*\\w+\\s*\\?\\s*\`[^\`]*\`\\s*:\\s*\`([^\`]*)\``
+          )
+        );
+        repl = fn?.[1] ?? "";
+      } else {
+        const varMatch = chunkJs.match(
+          new RegExp(`\\b${escapeRegExp(interpolator)}\\s*=\\s*\`([^\`]*)\``)
+        );
+        repl = varMatch?.[1] != null ? resolve(varMatch[1], depth + 1) : "";
+      }
+      resolved = resolved.replaceAll(`\${${interpolator}}`, repl);
+    }
+    return resolved;
+  };
+
+  const query = resolve(template);
+  if (query.includes("${")) return null;
+  return { query, hash: createHash("sha256").update(query).digest("hex") };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 async function fetchAaCryptoFromSite(): Promise<AaCrypto | null> {
   try {
     const html = await fetchText(MKISSA_URL);
@@ -81,8 +134,10 @@ async function fetchAaCryptoFromSite(): Promise<AaCrypto | null> {
     if (!appMatch?.[1]) return null;
 
     const appJs = await fetchText(`${CDN_IMMUTABLE}${appMatch[1]}`);
+    // SvelteKit lists route chunks in a deps array, not only as import/from statements.
+    // Match anipy-cli keygen.py: any "../chunks/*.js" string reference.
     const imports = [
-      ...appJs.matchAll(/(?:import|from)\s*["']\.\.\/(chunks\/[A-Za-z0-9_-]+\.js)["']/g),
+      ...appJs.matchAll(/["']\.\.\/(chunks\/[A-Za-z0-9_-]+\.js)["']/g),
     ].map((m) => m[1]!);
 
     for (const chunk of imports) {
@@ -95,6 +150,7 @@ async function fetchAaCryptoFromSite(): Promise<AaCrypto | null> {
       // buildId is inlined near the mask as a short numeric string fallback
       // (currently "19"). Prefer that when present; otherwise use the last known value.
       const buildIdMatch = js.match(new RegExp(`${masks[0]}["']?[\\s\\S]{0,80}?"(\\d{1,4})"`));
+      const sourced = sourceQueryFromChunk(js);
 
       return {
         expiresMs,
@@ -102,6 +158,8 @@ async function fetchAaCryptoFromSite(): Promise<AaCrypto | null> {
         buildId: buildIdMatch?.[1] ?? FALLBACK_BUILD_ID,
         key: xorKey(masks[0]!, aa.partB),
         mask: masks[0]!,
+        queryHash: sourced?.hash ?? FALLBACK_EPISODE_QUERY_HASH,
+        episodeQuery: sourced?.query ?? FALLBACK_EPISODE_QUERY,
       };
     }
     return null;
@@ -121,7 +179,29 @@ function fallbackCrypto(): AaCrypto {
     buildId: FALLBACK_BUILD_ID,
     key: xorKey(FALLBACK_MASK, FALLBACK_PART_B),
     mask: FALLBACK_MASK,
+    queryHash: FALLBACK_EPISODE_QUERY_HASH,
+    episodeQuery: FALLBACK_EPISODE_QUERY,
   };
+}
+
+async function loadAaCrypto(): Promise<AaCrypto> {
+  const fetched = await fetchAaCryptoFromSite();
+  if (fetched) {
+    cryptoCache = fetched;
+    if (IS_DEV) {
+      console.info(
+        `[allanime-gql] fetched aaReq crypto (epoch ${fetched.epoch}, mask ${fetched.mask.slice(0, 8)}, buildId ${fetched.buildId}, queryHash ${fetched.queryHash})`
+      );
+    }
+    return fetched;
+  }
+  if (IS_DEV) {
+    console.warn("[allanime-gql] could not fetch aaReq crypto, using fallback values");
+  }
+  const fallback = fallbackCrypto();
+  // Don't cache a long-lived failure; retry next request after a short window.
+  cryptoCache = { ...fallback, expiresMs: Date.now() + 60_000 };
+  return fallback;
 }
 
 async function ensureAaCrypto(): Promise<AaCrypto> {
@@ -130,25 +210,7 @@ async function ensureAaCrypto(): Promise<AaCrypto> {
   }
   if (cryptoInflight) return cryptoInflight;
 
-  cryptoInflight = (async () => {
-    const fetched = await fetchAaCryptoFromSite();
-    if (fetched) {
-      cryptoCache = fetched;
-      if (IS_DEV) {
-        console.info(
-          `[allanime-gql] fetched aaReq crypto (epoch ${fetched.epoch}, mask ${fetched.mask.slice(0, 8)}, buildId ${fetched.buildId})`
-        );
-      }
-      return fetched;
-    }
-    if (IS_DEV) {
-      console.warn("[allanime-gql] could not fetch aaReq crypto, using fallback values");
-    }
-    const fallback = fallbackCrypto();
-    // Don't cache a long-lived failure; retry next request after a short window.
-    cryptoCache = { ...fallback, expiresMs: Date.now() + 60_000 };
-    return fallback;
-  })();
+  cryptoInflight = loadAaCrypto();
 
   try {
     return await cryptoInflight;
@@ -157,16 +219,44 @@ async function ensureAaCrypto(): Promise<AaCrypto> {
   }
 }
 
+/** Force-refresh aaReq crypto (used when AllAnime becomes the active provider). */
+export async function refreshAaCrypto(): Promise<AaCrypto> {
+  cryptoCache = null;
+  if (cryptoInflight) return cryptoInflight;
+  cryptoInflight = loadAaCrypto();
+  try {
+    return await cryptoInflight;
+  } finally {
+    cryptoInflight = null;
+  }
+}
+
+export async function getEpisodeEmbedQueryHash(): Promise<string> {
+  const crypto = await ensureAaCrypto();
+  return crypto.queryHash;
+}
+
+export async function getEpisodeEmbedPersistedQuery(): Promise<{
+  hash: string;
+  query: string;
+}> {
+  const crypto = await ensureAaCrypto();
+  return { hash: crypto.queryHash, query: crypto.episodeQuery };
+}
+
+/**
+ * Match anipy-cli `build_source_request`: payload is `{v,ts,epoch,qh}` only
+ * (no buildId), and IV material is `epoch:qh:ts`.
+ */
 function buildAaReq(persistedQueryHash: string, crypto: AaCrypto): string {
   const ts = Math.floor(Date.now() / ALLANIME_TS_BUCKET_MS) * ALLANIME_TS_BUCKET_MS;
   const aaReqBase = {
     v: 1,
     ts,
     epoch: crypto.epoch,
-    buildId: crypto.buildId,
     qh: persistedQueryHash,
   };
-  const ivMaterial = `${crypto.epoch}:${crypto.buildId}:${persistedQueryHash}:${ts}`;
+  const ivMaterial = `${crypto.epoch}:${persistedQueryHash}:${ts}`;
   const iv = createHash("sha256").update(ivMaterial).digest().subarray(0, ALLANIME_IV_LENGTH);
   const jsonBlob = JSON.stringify(aaReqBase);
   const cipher = createCipheriv(ALLANIME_AES_ALGO, crypto.key, iv);
@@ -282,49 +372,72 @@ function isAcceptableGetResponse(parsed: unknown): boolean {
   return true;
 }
 
+function isPersistedQueryNotFound(parsed: unknown): boolean {
+  if (!parsed || typeof parsed !== "object") return false;
+  const errors = (parsed as { errors?: unknown }).errors;
+  if (!Array.isArray(errors)) return false;
+  return errors.some((error) => {
+    if (!error || typeof error !== "object") return false;
+    const record = error as { message?: unknown; extensions?: { code?: unknown } };
+    return (
+      record.extensions?.code === "PERSISTED_QUERY_NOT_FOUND" ||
+      record.message === "PersistedQueryNotFound"
+    );
+  });
+}
+
 async function tryPersistedQueryGet(
   variables: unknown,
   persistedQueryHash: string,
-  crypto: AaCrypto
-): Promise<unknown | null> {
-  const extensions = {
+  crypto: AaCrypto,
+  queryText?: string
+): Promise<{ parsed: unknown | null; persistedQueryNotFound: boolean }> {
+  const extensions: Record<string, unknown> = {
     persistedQuery: { version: 1, sha256Hash: persistedQueryHash },
     aaReq: buildAaReq(persistedQueryHash, crypto),
   };
   const url = new URL(`${ALLANIME_API}/api`);
   url.searchParams.set("variables", JSON.stringify(variables));
   url.searchParams.set("extensions", JSON.stringify(extensions));
+  if (queryText) {
+    url.searchParams.set("query", queryText);
+  }
 
   try {
     const res = await fetch(url.toString(), {
       method: "GET",
       headers: {
-        Referer: ALLANIME_REFERER,
-        Origin: ALLANIME_REFERER,
+        Referer: `${ALLANIME_REFERER}/`,
+        Origin: ALLANIME_ORIGIN,
         "User-Agent": getElectronUserAgent(),
       },
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) return { parsed: null, persistedQueryNotFound: false };
 
     const text = await res.text();
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
     } catch {
-      return null;
+      return { parsed: null, persistedQueryNotFound: false };
     }
+
+    if (isPersistedQueryNotFound(parsed)) {
+      return { parsed: null, persistedQueryNotFound: true };
+    }
+
     // Accept any well-formed GraphQL response that carries `data` and no `errors`.
     // This covers both the encrypted episode sourceUrls (tobeparsed) payload and the
     // plain `shows` payload used by search / recent uploads.
-    if (!isAcceptableGetResponse(parsed)) return null;
-    return parsed;
+    if (!isAcceptableGetResponse(parsed)) return { parsed: null, persistedQueryNotFound: false };
+    return { parsed, persistedQueryNotFound: false };
   } catch (error: unknown) {
     if (IS_DEV) {
       const message = error instanceof Error ? error.message : "unknown error";
       console.warn(`[allanime-gql] persisted query GET failed, falling back to POST: ${message}`);
     }
-    return null;
+    return { parsed: null, persistedQueryNotFound: false };
   }
 }
 
@@ -334,20 +447,49 @@ export async function allAnimeGql<T>(
   persistedQueryHash?: string
 ): Promise<T> {
   const crypto = persistedQueryHash ? await ensureAaCrypto() : null;
+  const episodeQuery =
+    persistedQueryHash && crypto && crypto.queryHash === persistedQueryHash
+      ? crypto.episodeQuery
+      : query;
 
   if (persistedQueryHash && crypto) {
-    const getResult = await tryPersistedQueryGet(variables, persistedQueryHash, crypto);
-    if (getResult) {
-      return normalizeAllAnimePayload(getResult, crypto.key) as T;
+    const hashOnly = await tryPersistedQueryGet(variables, persistedQueryHash, crypto);
+    if (hashOnly.parsed) {
+      return normalizeAllAnimePayload(hashOnly.parsed, crypto.key) as T;
+    }
+
+    // Apollo APQ / Cloudflare: hash-only can 520 or return PersistedQueryNotFound.
+    // Retry with the full site query text that produces the hash (anipy-compatible).
+    if (IS_DEV) {
+      console.info(
+        `[allanime-gql] hash-only GET missed (${
+          hashOnly.persistedQueryNotFound ? "PersistedQueryNotFound" : "no data"
+        }); retrying with full episode query (${episodeQuery.length} chars)`
+      );
+    }
+    const withQuery = await tryPersistedQueryGet(
+      variables,
+      persistedQueryHash,
+      crypto,
+      episodeQuery
+    );
+    if (withQuery.parsed) {
+      return normalizeAllAnimePayload(withQuery.parsed, crypto.key) as T;
     }
   }
 
   // POST path intentionally omits the Origin header. ani-cli only sets Origin on the
   // persisted-query GET, and AllAnime's gateway rejects POST bodies for `shows` queries
   // (search / recent uploads) when an Origin that doesn't match an allowed origin is sent.
-  const body: Record<string, unknown> = { variables, query };
+  const body: Record<string, unknown> = {
+    variables,
+    query: persistedQueryHash ? episodeQuery : query,
+  };
   if (persistedQueryHash && crypto) {
-    body.extensions = { aaReq: buildAaReq(persistedQueryHash, crypto) };
+    body.extensions = {
+      persistedQuery: { version: 1, sha256Hash: persistedQueryHash },
+      aaReq: buildAaReq(persistedQueryHash, crypto),
+    };
   }
 
   const res = await fetch(`${ALLANIME_API}/api`, {
@@ -365,5 +507,17 @@ export async function allAnimeGql<T>(
   }
 
   const json = (await res.json()) as unknown;
+  if (IS_DEV && persistedQueryHash) {
+    const record = json as { errors?: Array<{ message?: string }>; data?: { episode?: unknown } };
+    if (Array.isArray(record.errors) && record.errors.length > 0) {
+      console.warn(
+        `[allanime-gql] episode POST errors: ${record.errors.map((e) => e.message).join("; ")}`
+      );
+    } else if (record.data && "tobeparsed" in (record.data as object)) {
+      console.info("[allanime-gql] episode response has root tobeparsed");
+    } else if (record.data?.episode == null) {
+      console.warn("[allanime-gql] episode POST returned null episode");
+    }
+  }
   return normalizeAllAnimePayload(json, crypto?.key) as T;
 }

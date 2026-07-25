@@ -5,22 +5,19 @@
 import { getElectronUserAgent } from "@/main/electron-user-agent";
 import { Episode, ShowSearchResult } from "@/shared/types";
 
-import { ALLANIME_REFERER, allAnimeGql, normalizeAllAnimePayload } from "./allanime-gql";
 import { StreamMode, StreamProvider, StreamUrlResult } from "../stream-provider";
+import {
+  ALLANIME_REFERER,
+  allAnimeGql,
+  getEpisodeEmbedPersistedQuery,
+  normalizeAllAnimePayload,
+} from "./allanime-gql";
 
 const ALLANIME_BASE = "allanime.day";
 const IS_DEV = process.env.NODE_ENV !== "production";
 
 const MP4UPLOAD_REFERER = "https://www.mp4upload.com/";
 const PROVIDER_FETCH_TIMEOUT_MS = 25_000;
-
-const EPISODE_EMBED_GQL = `query ($showId: String!, $translationType: VaildTranslationTypeEnumType!, $episodeString: String!) { episode( showId: $showId translationType: $translationType episodeString: $episodeString ) { episodeString sourceUrls } }`;
-
-// Persisted-query SHA-256 hash for the episode embed query. ani-cli ships this same hash
-// and prefers the GET path because the POST path can return `episode: null` with an
-// internal "slugTime" error from the API.
-const EPISODE_EMBED_PERSISTED_HASH =
-  "d405d0edd690624b66baba3068e0edc3ac90f1597d898a1ec8db4e5c43c00fec";
 
 const RECENT_UPLOADS_GQL = `
   query (
@@ -230,7 +227,16 @@ interface ProviderPayloadExtract {
   m3u8Referer: string;
 }
 
-const SUPPORTED_SOURCE_NAMES = new Set(["Default", "Luf-Mp4", "Yt-mp4", "S-mp4", "Mp4"]);
+const SUPPORTED_SOURCE_NAMES = new Set([
+  "Default",
+  "Luf-Mp4",
+  "Yt-mp4",
+  "S-mp4",
+  "S-Mp4",
+  "Mp4",
+  "Uv-mp4",
+  "Ak",
+]);
 
 const CLOCK_STUB_RETRY_ATTEMPTS = 4;
 const CLOCK_STUB_RETRY_DELAY_MS = 400;
@@ -541,10 +547,7 @@ async function resolveSourceToCandidates(
   sourceUrl: string,
   sourceName?: string
 ): Promise<StreamCandidate[]> {
-  if (
-    sourceName &&
-    (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://"))
-  ) {
+  if (sourceName && (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://"))) {
     return resolveDirectSourceToCandidates(sourceUrl, sourceName);
   }
 
@@ -604,9 +607,7 @@ async function resolveSourceToCandidates(
   return streamCandidates;
 }
 
-async function resolveSourceGroup(
-  sources: SourceUrl[]
-): Promise<StreamCandidate[]> {
+async function resolveSourceGroup(sources: SourceUrl[]): Promise<StreamCandidate[]> {
   const candidateGroups = await Promise.all(
     sources.map(async (source) => {
       const sourceUrl = source.sourceUrl;
@@ -648,20 +649,25 @@ export class AllAnimeStreamProvider implements StreamProvider {
       translationType: mode,
       episodeString: episode,
     };
-    const json = await allAnimeGql<EpisodeResponse>(
-      variables,
-      EPISODE_EMBED_GQL,
-      EPISODE_EMBED_PERSISTED_HASH
-    );
+    const persisted = await getEpisodeEmbedPersistedQuery();
+    const json = await allAnimeGql<EpisodeResponse>(variables, persisted.query, persisted.hash);
     logStep("episode gql fetch", episodeQueryStartedAt);
 
     const sourceFilterStartedAt = Date.now();
+    const rawSources = json.data?.episode?.sourceUrls ?? [];
     const selectedSources = getEpisodeSources(json);
     logStep(
       "source filtering",
       sourceFilterStartedAt,
-      `selected=${selectedSources.length}`
+      `selected=${selectedSources.length} raw=${rawSources.length}`
     );
+    if (IS_DEV && selectedSources.length === 0) {
+      console.warn(
+        `[allanime-stream] no resolvable sources; raw names=${JSON.stringify(
+          rawSources.map((s) => s.sourceName)
+        )} episode=${json.data?.episode == null ? "null" : "present"}`
+      );
+    }
 
     if (selectedSources.length === 0) {
       throw new Error("No playable allanime sources found for this episode");
