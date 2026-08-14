@@ -424,8 +424,18 @@ export function WatchPage() {
       anilistSyncedEpisodeRef.current = null;
       return;
     }
-    const mediaId = Number(episode.id);
-    if (!Number.isInteger(mediaId) || mediaId <= 0) {
+
+    // Prefer a resolved AniList id from show details; never assume episode.id is AniList
+    // (provider-native numeric ids — e.g. anidb.app — collide with AniList media ids).
+    const fromEpisode = Number(episode.id);
+    const mediaId =
+      Number.isInteger(fromEpisode) &&
+      fromEpisode > 0 &&
+      episode.id !== episode.providerId
+        ? fromEpisode
+        : null;
+
+    if (mediaId == null) {
       anilistListRef.current = null;
       return;
     }
@@ -454,22 +464,27 @@ export function WatchPage() {
     return () => {
       cancelled = true;
     };
-  }, [episode?.id]);
+  }, [episode?.id, episode?.providerId]);
 
   useEffect(() => {
     if (showLoading || !showDetails) return;
-    const ctx = anilistListRef.current;
-    if (!ctx) return;
+    const mediaId = showDetails.anilistMediaId;
+    if (mediaId == null) return;
+
+    const prev = anilistListRef.current;
+    const next = {
+      mediaId,
+      listEntryId: showDetails.anilistListEntry?.id ?? prev?.listEntryId,
+      currentStatus:
+        (showDetails.anilistListEntry?.status as AniListMediaListStatus | undefined) ??
+        prev?.currentStatus,
+      totalEpisodes: prev?.totalEpisodes,
+    };
     const subCount = showDetails.episodes.sub?.length ?? 0;
     const dubCount = showDetails.episodes.dub?.length ?? 0;
     const totalEpisodes = Math.max(subCount, dubCount);
-    const next = { ...ctx };
     if (totalEpisodes > 0) {
       next.totalEpisodes = totalEpisodes;
-    }
-    if (showDetails.anilistListEntry) {
-      next.listEntryId = showDetails.anilistListEntry.id;
-      next.currentStatus = showDetails.anilistListEntry.status as AniListMediaListStatus;
     }
     anilistListRef.current = next;
   }, [showLoading, showDetails]);

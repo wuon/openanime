@@ -11,7 +11,13 @@ interface ThemeContext {
 
 type StreamMode = "sub" | "dub";
 
-type StreamProvider = "allanime" | "animepahe" | "animeparadise" | "reanime" | "senshi";
+type StreamProvider =
+  | "allanime"
+  | "anidb"
+  | "animepahe"
+  | "animeparadise"
+  | "reanime"
+  | "senshi";
 
 interface Show {
   id: string;

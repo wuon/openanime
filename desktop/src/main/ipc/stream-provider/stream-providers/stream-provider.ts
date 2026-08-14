@@ -2,6 +2,7 @@ import { Episode, ShowSearchResult } from "@/shared/types";
 import type { StreamProviderName } from "@/shared/stream-providers";
 
 import { AllAnimeStreamProvider } from "./allanime/allanime-stream-provider";
+import { AnidbStreamProvider } from "./anidb/anidb-stream-provider";
 import { AnimePaheStreamProvider } from "./animepahe-stream-provider";
 import { AnimeParadiseStreamProvider } from "./animeparadise-stream-provider";
 import { ReanimeStreamProvider } from "./reanime/reanime-stream-provider";
@@ -49,6 +50,7 @@ export interface StreamProvider {
 
 export const streamProviders: Record<StreamProviderName, StreamProvider> = {
   allanime: new AllAnimeStreamProvider(),
+  anidb: new AnidbStreamProvider(),
   animepahe: new AnimePaheStreamProvider(),
   animeparadise: new AnimeParadiseStreamProvider(),
   reanime: new ReanimeStreamProvider(),

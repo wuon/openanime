@@ -126,6 +126,7 @@ Three reference implementations cover most approaches:
 | Provider      | Style                                           | Main files                                                         |
 | ------------- | ----------------------------------------------- | ------------------------------------------------------------------ |
 | **AllAnime**  | GraphQL + embed resolution                      | `allanime/allanime-stream-provider.ts`, `allanime/allanime-gql.ts` |
+| **AniDB**     | anidb.app browse/API + CF browser session       | `anidb/anidb-stream-provider.ts`, `anidb/anidb-browser-fetch.ts`   |
 | **AnimePahe** | HTML/API scrape + hidden browser for challenges | `animepahe-stream-provider.ts`                                     |
 | **Reanime**   | REST API + Flixcloud decrypt + proxy upstream   | `reanime/reanime-stream-provider.ts`, `reanime/flixcloud-*.ts`     |
 | **Senshi**    | REST API → HLS (MAL-keyed)                      | `senshi/senshi-stream-provider.ts`, `anilist/anilist-mal.ts`       |
@@ -226,6 +227,7 @@ The app uses [`electron-log`](https://www.npmjs.com/package/electron-log) (`src/
 In development, providers still log with tagged prefixes, e.g.:
 
 - `[allanime-stream]`
+- `[anidb-provider]`, `[anidb-browser]`
 - `[animepahe-provider]`
 - `[reanime-provider]`
 - `[stream-proxy]`, `[reanime-upstream]`
@@ -277,6 +279,7 @@ src/main/
     stream-providers/
       stream-provider.ts          # interface + registry
       allanime/
+      anidb/
       animepahe-stream-provider.ts
       reanime/
 src/renderer/pages/
