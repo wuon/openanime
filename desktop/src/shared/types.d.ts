@@ -328,6 +328,11 @@ interface RecentlyWatchedContext {
   remove: (id: string) => Promise<void>;
 }
 
+interface PrivacyContext {
+  getIncognito: () => Promise<boolean>;
+  setIncognito: (enabled: boolean) => Promise<boolean>;
+}
+
 interface AppContext {
   version: () => Promise<string>;
   os: () => Promise<string>;
@@ -410,6 +415,7 @@ declare global {
   interface Window {
     app: AppContext;
     theme: ThemeContext;
+    privacy: PrivacyContext;
     streamProvider: StreamProviderContext;
     anilist: AniListContext;
     recentlyWatched: RecentlyWatchedContext;

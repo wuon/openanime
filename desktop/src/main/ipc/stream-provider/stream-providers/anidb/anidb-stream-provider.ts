@@ -346,9 +346,15 @@ export class AnidbStreamProvider implements StreamProvider {
     return latest > 0 ? latest : 1;
   }
 
-  private async searchBrowse(query: string, page = 1): Promise<AnidbSearchHit[]> {
+  private async searchBrowse(
+    query: string,
+    page = 1,
+    sort?: string
+  ): Promise<AnidbSearchHit[]> {
     const url = new URL(`${ANIDB_BASE}/browse`);
     if (query) url.searchParams.set("q", query);
+    // Home "Latest Updates" uses sort=order_updated; bare /browse defaults to trending.
+    if (sort) url.searchParams.set("sort", sort);
     if (page > 1) url.searchParams.set("page", String(page));
     const html = await fetchAnidbText(url.toString(), {
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -389,7 +395,7 @@ export class AnidbStreamProvider implements StreamProvider {
     const safeLimit = Math.max(1, limit);
     this.log("recent:start", { page: safePage, limit: safeLimit, mode });
 
-    const hits = await this.searchBrowse("", safePage);
+    const hits = await this.searchBrowse("", safePage, "order_updated");
     const sliced = hits.slice(0, safeLimit);
 
     // Welcome page opens /watch with episode.index — must be a real ep number

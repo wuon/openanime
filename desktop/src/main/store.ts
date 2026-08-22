@@ -2,6 +2,7 @@ import Store from "electron-store";
 
 interface AppStoreSchema {
   "anilist.accessToken"?: string;
+  "privacy.incognito"?: boolean;
   "stream.provider"?:
     | "allanime"
     | "anidb"

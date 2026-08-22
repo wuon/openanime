@@ -2,6 +2,7 @@ import { app, ipcMain } from "electron";
 import fs from "fs";
 import path from "path";
 
+import { isIncognitoEnabled } from "@/main/ipc/privacy/privacy-store";
 import type { HistoryEntry } from "@/shared/types";
 
 import {
@@ -85,6 +86,7 @@ function upsertEntrySync(entry: HistoryEntry): void {
 
 export function addRecentlyWatchedListeners() {
   ipcMain.handle(RECENTLY_WATCHED_UPSERT_CHANNEL, async (_event, entry: unknown): Promise<void> => {
+    if (isIncognitoEnabled()) return;
     if (!isValidHistoryEntry(entry)) return;
     try {
       await upsertEntryAsync(entry);
@@ -93,7 +95,7 @@ export function addRecentlyWatchedListeners() {
     }
   });
   ipcMain.on(RECENTLY_WATCHED_UPSERT_SYNC_CHANNEL, (event, entry: unknown): void => {
-    if (!isValidHistoryEntry(entry)) {
+    if (isIncognitoEnabled() || !isValidHistoryEntry(entry)) {
       event.returnValue = undefined;
       return;
     }

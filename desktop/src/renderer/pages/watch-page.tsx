@@ -178,6 +178,19 @@ export function WatchPage() {
     totalEpisodes?: number;
   } | null>(null);
   const anilistSyncedEpisodeRef = useRef<number | null>(null);
+  const incognitoRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.privacy.getIncognito().then((enabled) => {
+      if (!cancelled) {
+        incognitoRef.current = enabled;
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const clearReconnectTimeout = useCallback(() => {
     if (reconnectTimeoutRef.current != null) {
@@ -188,6 +201,7 @@ export function WatchPage() {
 
   const syncAniListProgress = useCallback(
     async (episodeNumber: number, episodeCompleted = false) => {
+      if (incognitoRef.current) return;
       const ctx = anilistListRef.current;
       if (!ctx) return;
       if (!episodeCompleted && anilistSyncedEpisodeRef.current === episodeNumber) return;
@@ -222,6 +236,7 @@ export function WatchPage() {
   );
 
   const syncHistoryProgress = useCallback(async (opts?: { sync?: boolean }) => {
+    if (incognitoRef.current) return;
     const base = lastHistoryEntryRef.current;
     const video = videoRef.current;
     if (!base || !video) return;

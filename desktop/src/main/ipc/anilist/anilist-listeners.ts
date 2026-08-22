@@ -1,5 +1,6 @@
 import { ipcMain } from "electron";
 
+import { isIncognitoEnabled } from "@/main/ipc/privacy/privacy-store";
 import type {
   AniListMediaListStatus,
   AniListMediaPageVariables,
@@ -86,6 +87,9 @@ export function addAniListListeners() {
 
   ipcMain.handle(
     ANILIST_SYNC_WATCH_PROGRESS_CHANNEL,
-    (_event, input: AniListSyncWatchProgressInput) => syncAniListWatchProgress(input)
+    (_event, input: AniListSyncWatchProgressInput) => {
+      if (isIncognitoEnabled()) return null;
+      return syncAniListWatchProgress(input);
+    }
   );
 }

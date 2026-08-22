@@ -46,6 +46,9 @@ export function SettingsPage() {
   const [streamProviderBusy, setStreamProviderBusy] = useState(false);
   const [openLogsBusy, setOpenLogsBusy] = useState(false);
   const [openLogsError, setOpenLogsError] = useState<string | null>(null);
+  const [incognitoEnabled, setIncognitoEnabled] = useState(false);
+  const [incognitoLoading, setIncognitoLoading] = useState(true);
+  const [incognitoBusy, setIncognitoBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +62,25 @@ export function SettingsPage() {
       .finally(() => {
         if (!cancelled) {
           setStreamProviderLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.privacy
+      .getIncognito()
+      .then((enabled) => {
+        if (!cancelled) {
+          setIncognitoEnabled(enabled);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIncognitoLoading(false);
         }
       });
     return () => {
@@ -161,6 +183,16 @@ export function SettingsPage() {
       setActiveStreamProvider(next);
     } finally {
       setStreamProviderBusy(false);
+    }
+  }, []);
+
+  const onIncognitoChange = useCallback(async (enabled: boolean) => {
+    setIncognitoBusy(true);
+    try {
+      const next = await window.privacy.setIncognito(enabled);
+      setIncognitoEnabled(next);
+    } finally {
+      setIncognitoBusy(false);
     }
   }, []);
 
@@ -279,6 +311,26 @@ export function SettingsPage() {
             void refreshAnilistStatus();
           }}
         />
+      </section>
+
+      <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1 min-w-0">
+          <h2 className="text-sm font-medium">Incognito mode</h2>
+          <p className="text-sm text-muted-foreground">
+            When enabled, watching does not update local history or AniList progress.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant={incognitoEnabled ? "outline" : "default"}
+          className="sm:shrink-0 w-full sm:w-auto"
+          disabled={incognitoLoading || incognitoBusy}
+          onClick={() => {
+            void onIncognitoChange(!incognitoEnabled);
+          }}
+        >
+          {incognitoLoading ? "…" : incognitoEnabled ? "Disable" : "Enable"}
+        </Button>
       </section>
 
       <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

@@ -6,6 +6,7 @@ import { EpisodeCard } from "@/renderer/components/episode-card";
 import { HomeHeroCarousel } from "@/renderer/components/home-hero-carousel";
 import { HorizontalCarousel } from "@/renderer/components/horizontal-carousel";
 import { Badge } from "@/renderer/components/ui/badge";
+import { Skeleton } from "@/renderer/components/ui/skeleton";
 import { usePinnedGithubIssues } from "@/renderer/hooks/use-pinned-github-issues";
 import { useResumeHistoryEntry } from "@/renderer/hooks/use-resume-history-entry";
 import { useWelcomeRecentlyUploaded } from "@/renderer/hooks/use-welcome-recent-uploads";
@@ -13,6 +14,22 @@ import { useWelcomeRecentlyWatched } from "@/renderer/hooks/use-welcome-recently
 import type { Episode } from "@/shared/types";
 
 const RECENT_PAGE_SIZE = 12;
+
+function RecentUploadsCarouselSkeleton({ count = 8 }: { count?: number }) {
+  return (
+    <div
+      className="flex gap-3 overflow-hidden pb-2 px-8 -mx-8"
+      aria-busy="true"
+      aria-label="Loading recently uploaded"
+    >
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="flex-shrink-0 w-36 sm:w-40">
+          <Skeleton className="w-full aspect-[2/3] rounded-2xl" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function WelcomePage() {
   const navigate = useNavigate();
@@ -70,7 +87,7 @@ export function WelcomePage() {
         <section className="flex flex-col gap-3">
           <h2 className="text-lg font-semibold">Recently uploaded</h2>
           {recentUploadsLoading ? (
-            <p className="text-muted-foreground text-sm">Loading…</p>
+            <RecentUploadsCarouselSkeleton />
           ) : recentUploads.length > 0 ? (
             <HorizontalCarousel
               items={recentUploads.map((episode) => ({

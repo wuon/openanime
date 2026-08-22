@@ -49,6 +49,40 @@ function displayTitle(show: ShowSearchResult): string {
   return show.title.english ?? show.title.romanji ?? show.title.native ?? show.providerId;
 }
 
+function showAvailabilityBadges(show: ShowSearchResult): React.ReactNode {
+  const subCount = show.availableEpisodes?.sub ?? 0;
+  const dubCount = show.availableEpisodes?.dub ?? 0;
+  if (subCount === 0 && dubCount === 0) return undefined;
+
+  return (
+    <>
+      <Badge variant="glass" className="text-white flex items-center gap-1 align-middle">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="lucide lucide-closed-caption-icon lucide-closed-caption h-[12px] w-[12px] shrink-0"
+        >
+          <path d="M10 9.17a3 3 0 1 0 0 5.66" />
+          <path d="M17 9.17a3 3 0 1 0 0 5.66" />
+          <rect x="2" y="5" width="20" height="14" rx="2" />
+        </svg>
+        {subCount}
+      </Badge>
+      <Badge variant="glass" className="text-white flex items-center gap-1">
+        <Mic className="h-[10px] w-[10px] shrink-0" />
+        {dubCount}
+      </Badge>
+    </>
+  );
+}
+
 type SortMode = "popularity" | "title";
 
 const QUARTER_ORDER = ["WINTER", "SPRING", "SUMMER", "FALL"] as const;
@@ -313,33 +347,7 @@ export function SearchPage() {
             coverUrl: show.thumbnail,
             title: displayTitle(show),
             subtitle: `Episode ${show.availableEpisodes?.sub ?? 0} · ${getAvailabilityLabel(show)}`,
-            badges: (
-              <>
-                <Badge variant="glass" className="text-white flex items-center gap-1 align-middle">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="lucide lucide-closed-caption-icon lucide-closed-caption h-[12px] w-[12px] shrink-0"
-                  >
-                    <path d="M10 9.17a3 3 0 1 0 0 5.66" />
-                    <path d="M17 9.17a3 3 0 1 0 0 5.66" />
-                    <rect x="2" y="5" width="20" height="14" rx="2" />
-                  </svg>
-                  {show.availableEpisodes?.sub ?? 0}
-                </Badge>
-                <Badge variant="glass" className="text-white flex items-center gap-1">
-                  <Mic className="h-[10px] w-[10px] shrink-0" />
-                  {show.availableEpisodes?.dub ?? 0}
-                </Badge>
-              </>
-            ),
+            badges: showAvailabilityBadges(show),
             onClick: () => openShow(show),
           }))}
         />
