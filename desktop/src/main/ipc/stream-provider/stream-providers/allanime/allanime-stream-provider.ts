@@ -3,6 +3,7 @@
  * See https://github.com/pystardust/ani-cli (allanime stream provider).
  */
 import { getElectronUserAgent } from "@/main/electron-user-agent";
+import type { SearchFilterDefinition } from "@/shared/search-filters";
 import { Episode, ShowSearchResult } from "@/shared/types";
 
 import { StreamMode, StreamProvider, StreamUrlResult } from "../stream-provider";
@@ -740,7 +741,12 @@ export class AllAnimeStreamProvider implements StreamProvider {
     return episodes;
   }
 
-  async search(query: string, mode: StreamMode = "sub"): Promise<ShowSearchResult[]> {
+  getSearchFilters(): SearchFilterDefinition[] {
+    return [];
+  }
+
+  async search(query: string, _filters?: unknown): Promise<ShowSearchResult[]> {
+    const mode: StreamMode = "sub";
     const variables = {
       search: {
         allowAdult: false,

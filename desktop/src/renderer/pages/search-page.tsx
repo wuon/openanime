@@ -6,6 +6,7 @@ import {
   Monitor,
   Search,
   SunSnow,
+  Tags,
   Trash2,
 } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -24,6 +25,12 @@ import {
 import { Skeleton } from "@/renderer/components/ui/skeleton";
 import { useDebouncedValue } from "@/renderer/hooks/use-debounced-value";
 import { useWelcomeSearch } from "@/renderer/hooks/use-welcome-search";
+import {
+  SEARCH_FILTER_ANY_VALUE,
+  defaultSearchFilterValues,
+  type SearchFilterDefinition,
+  type SearchFilterValues,
+} from "@/shared/search-filters";
 import { ShowSearchResult } from "@/shared/types";
 
 import { Badge } from "../components/ui/badge";
@@ -83,10 +90,6 @@ function showAvailabilityBadges(show: ShowSearchResult): React.ReactNode {
   );
 }
 
-type SortMode = "popularity" | "title";
-
-const QUARTER_ORDER = ["WINTER", "SPRING", "SUMMER", "FALL"] as const;
-
 const GRID_SKELETON_COUNT = 18;
 
 function SearchGridSkeleton() {
@@ -101,20 +104,35 @@ function SearchGridSkeleton() {
   );
 }
 
-function quarterSortKey(quarter: string): number {
-  const i = QUARTER_ORDER.indexOf(quarter.toUpperCase() as (typeof QUARTER_ORDER)[number]);
-  return i === -1 ? 999 : i;
+function filterIcon(key: string): React.ReactNode {
+  const className = "h-4 w-4 shrink-0 opacity-70";
+  switch (key) {
+    case "type":
+      return <Monitor className={className} aria-hidden />;
+    case "status":
+      return <BarChart3 className={className} aria-hidden />;
+    case "season":
+      return <SunSnow className={className} aria-hidden />;
+    case "year":
+      return <Calendar className={className} aria-hidden />;
+    case "genres":
+      return <Tags className={className} aria-hidden />;
+    case "sort":
+      return <ArrowUpDown className={className} aria-hidden />;
+    default:
+      return null;
+  }
 }
 
-function formatQuarterLabel(quarter: string): string {
-  const upper = quarter.toUpperCase();
-  const labels: Record<string, string> = {
-    WINTER: "Winter",
-    SPRING: "Spring",
-    SUMMER: "Summer",
-    FALL: "Fall",
-  };
-  return labels[upper] ?? quarter;
+function filterTriggerLabel(
+  def: SearchFilterDefinition,
+  value: string | undefined
+): string {
+  const selected = value ?? def.defaultValue ?? SEARCH_FILTER_ANY_VALUE;
+  if (!def.required && selected === SEARCH_FILTER_ANY_VALUE) {
+    return def.allLabel;
+  }
+  return def.options.find((o) => o.value === selected)?.label ?? def.allLabel;
 }
 
 export function SearchPage() {
@@ -129,85 +147,41 @@ export function SearchPage() {
     setQuery(qFromUrl);
   }, [qFromUrl]);
 
-  const { results, loading, error } = useWelcomeSearch(debouncedQuery, {
-    loadLatestWhenEmpty: true,
-  });
-
-  const [sortMode, setSortMode] = useState<SortMode>("popularity");
-  const [statusFilter, setStatusFilter] = useState<string>("any");
-  const [typeFilter, setTypeFilter] = useState<string>("any");
-  const [yearFilter, setYearFilter] = useState<string>("any");
-  const [quarterFilter, setQuarterFilter] = useState<string>("any");
+  const [filterDefs, setFilterDefs] = useState<SearchFilterDefinition[]>([]);
+  const [filters, setFilters] = useState<SearchFilterValues>({});
+  const [filtersReady, setFiltersReady] = useState(false);
 
   useEffect(() => {
-    setStatusFilter("any");
-    setTypeFilter("any");
-    setYearFilter("any");
-    setQuarterFilter("any");
-  }, [debouncedQuery]);
+    let cancelled = false;
+    void window.streamProvider
+      .getSearchFilters()
+      .then((defs) => {
+        if (cancelled) return;
+        setFilterDefs(defs);
+        setFilters(defaultSearchFilterValues(defs));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setFilterDefs([]);
+        setFilters({});
+      })
+      .finally(() => {
+        if (!cancelled) setFiltersReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const statusOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const s of results) {
-      if (s.status) set.add(s.status);
-    }
-    return Array.from(set).sort();
-  }, [results]);
+  const { results, loading, error } = useWelcomeSearch(debouncedQuery, {
+    // Wait for provider filter defs so AniDB doesn't double-fetch unfiltered then filtered.
+    loadLatestWhenEmpty: filtersReady,
+    filters: filtersReady ? filters : undefined,
+  });
 
-  const typeOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const s of results) {
-      if (s.type) set.add(s.type);
-    }
-    return Array.from(set).sort();
-  }, [results]);
-
-  const yearOptions = useMemo(() => {
-    const set = new Set<number>();
-    for (const s of results) {
-      const y = s.season?.year;
-      if (y != null && Number.isFinite(y)) set.add(y);
-    }
-    return Array.from(set).sort((a, b) => b - a);
-  }, [results]);
-
-  const quarterOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const s of results) {
-      const q = s.season?.quarter?.trim();
-      if (q) set.add(q);
-    }
-    return Array.from(set).sort(
-      (a, b) =>
-        quarterSortKey(a) - quarterSortKey(b) ||
-        a.localeCompare(b, undefined, { sensitivity: "base" })
-    );
-  }, [results]);
-
-  const filteredSorted = useMemo(() => {
-    let list = results.slice();
-    if (yearFilter !== "any") {
-      const y = Number(yearFilter);
-      list = list.filter((s) => s.season?.year === y);
-    }
-    if (quarterFilter !== "any") {
-      list = list.filter((s) => s.season?.quarter?.toUpperCase() === quarterFilter.toUpperCase());
-    }
-    if (statusFilter !== "any") {
-      list = list.filter((s) => s.status === statusFilter);
-    }
-    if (typeFilter !== "any") {
-      list = list.filter((s) => s.type === typeFilter);
-    }
-    if (sortMode === "popularity") {
-      list.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-    } else {
-      list.sort((a, b) =>
-        displayTitle(a).localeCompare(displayTitle(b), undefined, { sensitivity: "base" })
-      );
-    }
-    return list;
-  }, [results, sortMode, statusFilter, typeFilter, yearFilter, quarterFilter]);
+  const setFilterValue = useCallback((key: string, value: string) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  }, []);
 
   const openShow = useCallback(
     (show: ShowSearchResult) => {
@@ -220,12 +194,18 @@ export function SearchPage() {
 
   const clearAll = useCallback(() => {
     setQuery("");
-    setSortMode("popularity");
-    setStatusFilter("any");
-    setTypeFilter("any");
-    setYearFilter("any");
-    setQuarterFilter("any");
-  }, []);
+    setFilters(defaultSearchFilterValues(filterDefs));
+  }, [filterDefs]);
+
+  const hasFilters = filterDefs.length > 0;
+
+  const filterGridClass = useMemo(() => {
+    const count = filterDefs.length;
+    if (count <= 2) return "grid grid-cols-2 gap-2";
+    if (count <= 3) return "grid grid-cols-2 sm:grid-cols-3 gap-2";
+    if (count <= 4) return "grid grid-cols-2 sm:grid-cols-4 gap-2";
+    return "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2";
+  }, [filterDefs.length]);
 
   return (
     <div className="w-full max-w-[1600px] mx-auto flex flex-col gap-6 p-6 md:p-8">
@@ -244,91 +224,54 @@ export function SearchPage() {
             />
           </div>
 
-          <div className="flex flex-wrap gap-2 items-center xl:flex-nowrap">
-            <Button
-              type="button"
-              variant="outline"
-              aria-label="Clear all filters"
-              onClick={clearAll}
-            >
-              <Trash2 className="h-4 w-4" />
-              Clear all filters
-            </Button>
+          {hasFilters && (
+            <div className="flex flex-wrap gap-2 items-center xl:flex-nowrap">
+              <Button
+                type="button"
+                variant="outline"
+                aria-label="Clear all filters"
+                onClick={clearAll}
+              >
+                <Trash2 className="h-4 w-4" />
+                Clear
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {hasFilters && (
+          <div className={filterGridClass}>
+            {filterDefs.map((def) => {
+              const value = filters[def.key] ?? def.defaultValue ?? SEARCH_FILTER_ANY_VALUE;
+              return (
+                <Select
+                  key={def.key}
+                  value={value}
+                  onValueChange={(v) => setFilterValue(def.key, v)}
+                >
+                  <SelectTrigger className={SEARCH_SELECT_TRIGGER_CLASS}>
+                    {filterIcon(def.key)}
+                    <SelectValue placeholder={def.allLabel}>
+                      {filterTriggerLabel(def, value)}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className={SEARCH_SELECT_CONTENT_CLASS}>
+                    {!def.required && (
+                      <SelectItem value={SEARCH_FILTER_ANY_VALUE}>{def.allLabel}</SelectItem>
+                    )}
+                    {def.options
+                      .filter((opt) => def.required || opt.value !== SEARCH_FILTER_ANY_VALUE)
+                      .map((opt) => (
+                        <SelectItem key={`${def.key}:${opt.value}`} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              );
+            })}
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-          <Select value={quarterFilter} onValueChange={setQuarterFilter}>
-            <SelectTrigger className={SEARCH_SELECT_TRIGGER_CLASS}>
-              <SunSnow className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
-              <SelectValue placeholder="Any season" />
-            </SelectTrigger>
-            <SelectContent className={SEARCH_SELECT_CONTENT_CLASS}>
-              <SelectItem value="any">Any season</SelectItem>
-              {quarterOptions.map((q) => (
-                <SelectItem key={q} value={q}>
-                  {formatQuarterLabel(q)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={yearFilter} onValueChange={setYearFilter}>
-            <SelectTrigger className={SEARCH_SELECT_TRIGGER_CLASS}>
-              <Calendar className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
-              <SelectValue placeholder="Any year" />
-            </SelectTrigger>
-            <SelectContent className={SEARCH_SELECT_CONTENT_CLASS}>
-              <SelectItem value="any">Any year</SelectItem>
-              {yearOptions.map((y) => (
-                <SelectItem key={y} value={String(y)}>
-                  {y}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className={SEARCH_SELECT_TRIGGER_CLASS}>
-              <BarChart3 className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
-              <SelectValue placeholder="Any status" />
-            </SelectTrigger>
-            <SelectContent className={SEARCH_SELECT_CONTENT_CLASS}>
-              <SelectItem value="any">Any status</SelectItem>
-              {statusOptions.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className={SEARCH_SELECT_TRIGGER_CLASS}>
-              <Monitor className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
-              <SelectValue placeholder="Any format" />
-            </SelectTrigger>
-            <SelectContent className={SEARCH_SELECT_CONTENT_CLASS}>
-              <SelectItem value="any">Any format</SelectItem>
-              {typeOptions.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {t}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
-            <SelectTrigger className={SEARCH_SELECT_TRIGGER_CLASS}>
-              <ArrowUpDown className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className={SEARCH_SELECT_CONTENT_CLASS}>
-              <SelectItem value="popularity">Popularity</SelectItem>
-              <SelectItem value="title">Title</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        )}
       </div>
 
       {error && (
@@ -339,9 +282,9 @@ export function SearchPage() {
 
       {loading && !error && <SearchGridSkeleton />}
 
-      {!loading && !error && filteredSorted.length > 0 && (
+      {!loading && !error && results.length > 0 && (
         <ShowGrid
-          items={filteredSorted.map((show) => ({
+          items={results.map((show) => ({
             id: `${show.id}-${show.providerId}`,
             rating: show.score,
             coverUrl: show.thumbnail,
@@ -353,7 +296,7 @@ export function SearchPage() {
         />
       )}
 
-      {!loading && !error && filteredSorted.length === 0 && (
+      {!loading && !error && results.length === 0 && (
         <p className="text-muted-foreground text-sm">No results found.</p>
       )}
     </div>

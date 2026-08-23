@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+import type { SearchFilterDefinition, SearchFilterValues } from "@/shared/search-filters";
 import { Episode, ShowSearchResult } from "@/shared/types";
 import type { StreamProviderName } from "@/shared/stream-providers";
 
@@ -11,6 +12,7 @@ import {
   STREAM_PROVIDER_CANCEL_TRANSCODE_CHANNEL,
   STREAM_PROVIDER_RECENT_UPLOADS_CHANNEL,
   STREAM_PROVIDER_SEARCH_CHANNEL,
+  STREAM_PROVIDER_SEARCH_FILTERS_CHANNEL,
   STREAM_PROVIDER_SHOW_DETAILS_CHANNEL,
   STREAM_PROVIDER_STREAM_PROXY_BASE_CHANNEL,
   STREAM_PROVIDER_TRANSCODE_PROGRESS_CHANNEL,
@@ -52,8 +54,16 @@ export function exposeStreamProviderContext() {
         STREAM_PROVIDER_ACTIVE_SET_CHANNEL,
         provider
       ) as Promise<StreamProviderName>,
-    search: (query: string) =>
-      ipcRenderer.invoke(STREAM_PROVIDER_SEARCH_CHANNEL, query) as Promise<ShowSearchResult[]>,
+    search: (query: string, filters?: SearchFilterValues) =>
+      ipcRenderer.invoke(
+        STREAM_PROVIDER_SEARCH_CHANNEL,
+        query,
+        filters
+      ) as Promise<ShowSearchResult[]>,
+    getSearchFilters: () =>
+      ipcRenderer.invoke(
+        STREAM_PROVIDER_SEARCH_FILTERS_CHANNEL
+      ) as Promise<SearchFilterDefinition[]>,
     getEpisodes: (providerId: string, mode?: "sub" | "dub", providerName?: StreamProviderName) =>
       ipcRenderer.invoke(
         STREAM_PROVIDER_EPISODES_CHANNEL,

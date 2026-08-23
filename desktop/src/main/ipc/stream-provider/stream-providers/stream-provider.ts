@@ -1,5 +1,6 @@
-import { Episode, ShowSearchResult } from "@/shared/types";
+import type { SearchFilterDefinition, SearchFilterValues } from "@/shared/search-filters";
 import type { StreamProviderName } from "@/shared/stream-providers";
+import { Episode, ShowSearchResult } from "@/shared/types";
 
 import { AllAnimeStreamProvider } from "./allanime/allanime-stream-provider";
 import { AnidbStreamProvider } from "./anidb/anidb-stream-provider";
@@ -45,7 +46,9 @@ export interface StreamProvider {
     mode: StreamMode
   ): Promise<StreamUrlResult>;
   getRecentUploads(page: number, limit?: number, mode?: StreamMode): Promise<Episode[]>;
-  search(query: string): Promise<ShowSearchResult[]>;
+  search(query: string, filters?: SearchFilterValues): Promise<ShowSearchResult[]>;
+  /** Provider-specific browse filters; empty → search UI shows only the query bar. */
+  getSearchFilters(): SearchFilterDefinition[];
 }
 
 export const streamProviders: Record<StreamProviderName, StreamProvider> = {

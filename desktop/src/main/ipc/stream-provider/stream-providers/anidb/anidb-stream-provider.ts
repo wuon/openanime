@@ -3,6 +3,11 @@
  * @see https://github.com/pystardust/ani-cli
  * @see https://github.com/sdaqo/anipy-cli (anidbapp_provider.py)
  */
+import {
+  compactSearchFilters,
+  type SearchFilterDefinition,
+  type SearchFilterValues,
+} from "@/shared/search-filters";
 import { Episode, ShowSearchResult } from "@/shared/types";
 import {
   parseHlsVideoVariants,
@@ -21,6 +26,7 @@ import {
   fetchAnidbJson,
   fetchAnidbText,
 } from "./anidb-browser-fetch";
+import { resolveAnidbSearchFilters } from "./anidb-search-filters";
 import { ANIDB_BASE, ANIDB_REFERER, anidbNumericId } from "./constants";
 
 const SEARCH_LIMIT = 36;
@@ -346,15 +352,21 @@ export class AnidbStreamProvider implements StreamProvider {
     return latest > 0 ? latest : 1;
   }
 
+  getSearchFilters(): SearchFilterDefinition[] {
+    return resolveAnidbSearchFilters();
+  }
+
   private async searchBrowse(
     query: string,
     page = 1,
-    sort?: string
+    filters?: SearchFilterValues
   ): Promise<AnidbSearchHit[]> {
     const url = new URL(`${ANIDB_BASE}/browse`);
     if (query) url.searchParams.set("q", query);
-    // Home "Latest Updates" uses sort=order_updated; bare /browse defaults to trending.
-    if (sort) url.searchParams.set("sort", sort);
+    const active = compactSearchFilters(filters);
+    for (const [key, value] of Object.entries(active)) {
+      url.searchParams.set(key, value);
+    }
     if (page > 1) url.searchParams.set("page", String(page));
     const html = await fetchAnidbText(url.toString(), {
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -362,12 +374,13 @@ export class AnidbStreamProvider implements StreamProvider {
     return parseSearchHits(html);
   }
 
-  async search(query: string): Promise<ShowSearchResult[]> {
+  async search(query: string, filters?: SearchFilterValues): Promise<ShowSearchResult[]> {
     const startedAt = Date.now();
     const trimmed = query.trim();
-    this.log("search:start", { query: trimmed });
+    const activeFilters = compactSearchFilters(filters);
+    this.log("search:start", { query: trimmed, filters: activeFilters });
 
-    const hits = await this.searchBrowse(trimmed);
+    const hits = await this.searchBrowse(trimmed, 1, activeFilters);
     // `id` must not be the anidb numeric id — that collides with AniList media ids.
     // Prefer slug until getShowDetails resolves the real AniList id from the page.
     const results = hits.slice(0, SEARCH_LIMIT).map((hit) => ({
@@ -395,7 +408,8 @@ export class AnidbStreamProvider implements StreamProvider {
     const safeLimit = Math.max(1, limit);
     this.log("recent:start", { page: safePage, limit: safeLimit, mode });
 
-    const hits = await this.searchBrowse("", safePage, "order_updated");
+    // Home "Latest Updates" uses sort=order_updated; bare /browse defaults to trending.
+    const hits = await this.searchBrowse("", safePage, { sort: "order_updated" });
     const sliced = hits.slice(0, safeLimit);
 
     // Welcome page opens /watch with episode.index — must be a real ep number

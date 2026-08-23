@@ -1,6 +1,7 @@
 import { BrowserWindow } from "electron";
 
 import { getElectronUserAgent } from "@/main/electron-user-agent";
+import type { SearchFilterDefinition } from "@/shared/search-filters";
 import { Episode, ShowSearchResult } from "@/shared/types";
 
 import { StreamMode, StreamProvider, StreamUrlResult } from "./stream-provider";
@@ -67,6 +68,10 @@ export class AnimePaheStreamProvider implements StreamProvider {
     if (!IS_DEV) return;
     const suffix = meta ? ` ${JSON.stringify(meta)}` : "";
     console.info(`[animepahe-provider] ${event}${suffix}`);
+  }
+
+  getSearchFilters(): SearchFilterDefinition[] {
+    return [];
   }
 
   async search(query: string): Promise<ShowSearchResult[]> {

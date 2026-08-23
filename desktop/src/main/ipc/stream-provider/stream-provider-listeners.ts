@@ -3,6 +3,7 @@ import { ipcMain } from "electron";
 import { getEpisodesList, getShowDetails } from "@/main/ipc/stream-provider/stream-provider-search";
 import { registerStreamUpstreamHandler } from "@/main/stream-proxy-upstream";
 import { appStore } from "@/main/store";
+import type { SearchFilterValues } from "@/shared/search-filters";
 import { resolveEnabledStreamProvider } from "@/shared/stream-providers";
 import {
   getStreamProxyBaseUrl,
@@ -19,6 +20,7 @@ import {
   STREAM_PROVIDER_CANCEL_TRANSCODE_CHANNEL,
   STREAM_PROVIDER_RECENT_UPLOADS_CHANNEL,
   STREAM_PROVIDER_SEARCH_CHANNEL,
+  STREAM_PROVIDER_SEARCH_FILTERS_CHANNEL,
   STREAM_PROVIDER_SHOW_DETAILS_CHANNEL,
   STREAM_PROVIDER_STREAM_PROXY_BASE_CHANNEL,
   STREAM_PROVIDER_STREAM_URL_CHANNEL,
@@ -54,9 +56,16 @@ export function addStreamProviderListeners() {
     warmAllAnimeCryptoIfActive(resolved);
     return resolved;
   });
-  ipcMain.handle(STREAM_PROVIDER_SEARCH_CHANNEL, (_event, query: string) => {
+  ipcMain.handle(
+    STREAM_PROVIDER_SEARCH_CHANNEL,
+    (_event, query: string, filters?: SearchFilterValues) => {
+      const providerName = getActiveStreamProviderName();
+      return streamProviders[providerName].search(query, filters);
+    }
+  );
+  ipcMain.handle(STREAM_PROVIDER_SEARCH_FILTERS_CHANNEL, () => {
     const providerName = getActiveStreamProviderName();
-    return streamProviders[providerName].search(query);
+    return streamProviders[providerName].getSearchFilters();
   });
   ipcMain.handle(
     STREAM_PROVIDER_EPISODES_CHANNEL,

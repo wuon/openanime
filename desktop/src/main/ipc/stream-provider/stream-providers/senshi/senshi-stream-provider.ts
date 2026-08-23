@@ -1,5 +1,6 @@
 import { getElectronUserAgent } from "@/main/electron-user-agent";
 import { resolveAniListIdsFromMal } from "@/main/ipc/anilist/anilist-mal";
+import type { SearchFilterDefinition } from "@/shared/search-filters";
 import { Episode, ShowSearchResult } from "@/shared/types";
 import {
   parseHlsVideoVariants,
@@ -255,6 +256,10 @@ export class SenshiStreamProvider implements StreamProvider {
     const json = await this.requestJson<SenshiLatestEmbed[]>("GET", "/episode-embeds/latest");
     if (!Array.isArray(json)) return [];
     return json.filter((row) => embedMatchesMode(row.status, mode));
+  }
+
+  getSearchFilters(): SearchFilterDefinition[] {
+    return [];
   }
 
   async search(query: string): Promise<ShowSearchResult[]> {

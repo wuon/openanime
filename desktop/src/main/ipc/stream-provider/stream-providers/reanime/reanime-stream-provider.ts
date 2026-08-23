@@ -1,4 +1,5 @@
 import { getElectronUserAgent } from "@/main/electron-user-agent";
+import type { SearchFilterDefinition } from "@/shared/search-filters";
 import { Episode, ShowSearchResult } from "@/shared/types";
 import {
   parseHlsVideoVariants,
@@ -510,6 +511,10 @@ export class ReanimeStreamProvider implements StreamProvider {
       ms: Date.now() - startedAt,
     });
     return episodes;
+  }
+
+  getSearchFilters(): SearchFilterDefinition[] {
+    return [];
   }
 
   async search(query: string): Promise<ShowSearchResult[]> {

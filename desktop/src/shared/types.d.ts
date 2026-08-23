@@ -1,5 +1,6 @@
 import { AppUpdateCheckResult } from "./app-update-types";
 import type { GithubIssuesListResult } from "./github-issues-types";
+import type { SearchFilterDefinition, SearchFilterValues } from "./search-filters";
 
 interface ThemeContext {
   toggle: () => Promise<boolean>;
@@ -361,7 +362,8 @@ export interface UrlOpenerContext {
 interface StreamProviderContext {
   getActiveProvider: () => Promise<StreamProvider>;
   setActiveProvider: (provider: StreamProvider) => Promise<StreamProvider>;
-  search: (query: string) => Promise<ShowSearchResult[]>;
+  search: (query: string, filters?: SearchFilterValues) => Promise<ShowSearchResult[]>;
+  getSearchFilters: () => Promise<SearchFilterDefinition[]>;
   getEpisodes: (
     providerId: string,
     mode?: "sub" | "dub",
