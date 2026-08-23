@@ -61,6 +61,8 @@ interface AnidbSearchHit {
   thumbnail: string | null;
   /** Full slug path segment when known (e.g. naruto-3686). */
   slug: string | null;
+  /** Site rating from the card badge (e.g. 8.7), when present. */
+  score?: number;
 }
 
 function decodeHtmlEntities(value: string): string {
@@ -79,6 +81,22 @@ function absoluteUrl(ref: string | null | undefined): string | null {
   if (/^https?:\/\//i.test(value)) return value;
   const sep = value.startsWith("/") ? "" : "/";
   return `${ANIDB_BASE}${sep}${value}`;
+}
+
+/**
+ * Score badge on browse cards:
+ * `<span class="badge badge-gray ..."><svg>…</svg> 8.7</span>`
+ * Match the number after `</svg>` so path/`viewBox` digits aren't captured.
+ */
+function parseCardScore(cardHtml: string): number | undefined {
+  const badgeMatch =
+    /class="[^"]*badge-gray[^"]*"[^>]*>[\s\S]*?<\/svg>\s*(\d+(?:\.\d+)?)\s*<\/span>/i.exec(
+      cardHtml
+    ) ??
+    /text-yellow-400[\s\S]*?<\/svg>\s*(\d+(?:\.\d+)?)/i.exec(cardHtml);
+  if (!badgeMatch?.[1]) return undefined;
+  const score = Number(badgeMatch[1]);
+  return Number.isFinite(score) ? score : undefined;
 }
 
 /**
@@ -126,6 +144,7 @@ function parseSearchHits(html: string): AnidbSearchHit[] {
       title,
       thumbnail: absoluteUrl(imgSrc),
       slug,
+      score: parseCardScore(card),
     });
   }
 
@@ -388,6 +407,7 @@ export class AnidbStreamProvider implements StreamProvider {
       providerId: hit.providerId,
       title: { english: hit.title },
       thumbnail: hit.thumbnail,
+      score: hit.score,
     }));
 
     this.log("search:done", {

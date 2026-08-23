@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/renderer/components/ui/select";
+import { Switch } from "@/renderer/components/ui/switch";
 import type { AppUpdateCheckResult } from "@/shared/app-update-types";
 import {
   STREAM_PROVIDER_LABELS,
@@ -313,24 +314,22 @@ export function SettingsPage() {
         />
       </section>
 
-      <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1 min-w-0">
           <h2 className="text-sm font-medium">Incognito mode</h2>
           <p className="text-sm text-muted-foreground">
             When enabled, watching does not update local history or AniList progress.
           </p>
         </div>
-        <Button
-          type="button"
-          variant={incognitoEnabled ? "outline" : "default"}
-          className="sm:shrink-0 w-full sm:w-auto"
+        <Switch
+          checked={incognitoEnabled}
           disabled={incognitoLoading || incognitoBusy}
-          onClick={() => {
-            void onIncognitoChange(!incognitoEnabled);
+          onCheckedChange={(checked) => {
+            void onIncognitoChange(checked);
           }}
-        >
-          {incognitoLoading ? "…" : incognitoEnabled ? "Disable" : "Enable"}
-        </Button>
+          aria-label="Incognito mode"
+          className="sm:shrink-0"
+        />
       </section>
 
       <section className="rounded-xl border border-border p-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
