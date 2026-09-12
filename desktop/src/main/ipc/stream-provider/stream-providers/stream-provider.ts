@@ -6,6 +6,7 @@ import { AllAnimeStreamProvider } from "./allanime/allanime-stream-provider";
 import { AnidbStreamProvider } from "./anidb/anidb-stream-provider";
 import { AnimePaheStreamProvider } from "./animepahe-stream-provider";
 import { AnimeParadiseStreamProvider } from "./animeparadise-stream-provider";
+import { HianimeStreamProvider } from "./hianime/hianime-stream-provider";
 import { ReanimeStreamProvider } from "./reanime/reanime-stream-provider";
 import { SenshiStreamProvider } from "./senshi/senshi-stream-provider";
 
@@ -52,6 +53,7 @@ export interface StreamProvider {
 }
 
 export const streamProviders: Record<StreamProviderName, StreamProvider> = {
+  hianime: new HianimeStreamProvider(),
   allanime: new AllAnimeStreamProvider(),
   anidb: new AnidbStreamProvider(),
   animepahe: new AnimePaheStreamProvider(),

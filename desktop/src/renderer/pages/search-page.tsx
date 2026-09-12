@@ -174,7 +174,7 @@ export function SearchPage() {
   }, []);
 
   const { results, loading, error } = useWelcomeSearch(debouncedQuery, {
-    // Wait for provider filter defs so AniDB doesn't double-fetch unfiltered then filtered.
+    // Wait for provider filter defs so the first search isn't unfiltered then filtered.
     loadLatestWhenEmpty: filtersReady,
     filters: filtersReady ? filters : undefined,
   });

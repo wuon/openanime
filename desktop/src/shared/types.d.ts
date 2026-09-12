@@ -13,6 +13,7 @@ interface ThemeContext {
 type StreamMode = "sub" | "dub";
 
 type StreamProvider =
+  | "hianime"
   | "allanime"
   | "anidb"
   | "animepahe"

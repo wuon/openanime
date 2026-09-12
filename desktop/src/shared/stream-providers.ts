@@ -3,6 +3,7 @@ import { streamProviderAvailability } from "./stream-providers.config";
 export type StreamProviderName = keyof typeof streamProviderAvailability;
 
 export const STREAM_PROVIDER_LABELS: Record<StreamProviderName, string> = {
+  hianime: "HiAnime",
   allanime: "AllAnime",
   anidb: "AniDB",
   animepahe: "AnimePahe",

@@ -123,13 +123,14 @@ Providers are **not** callable from the renderer directly. Use the preload bridg
 
 Three reference implementations cover most approaches:
 
-| Provider      | Style                                           | Main files                                                         |
-| ------------- | ----------------------------------------------- | ------------------------------------------------------------------ |
-| **AllAnime**  | GraphQL + embed resolution                      | `allanime/allanime-stream-provider.ts`, `allanime/allanime-gql.ts` |
-| **AniDB**     | anidb.app browse/API + CF browser session       | `anidb/anidb-stream-provider.ts`, `anidb/anidb-browser-fetch.ts`   |
-| **AnimePahe** | HTML/API scrape + hidden browser for challenges | `animepahe-stream-provider.ts`                                     |
-| **Reanime**   | REST API + Flixcloud decrypt + proxy upstream   | `reanime/reanime-stream-provider.ts`, `reanime/flixcloud-*.ts`     |
-| **Senshi**    | REST API → HLS (MAL-keyed)                      | `senshi/senshi-stream-provider.ts`, `anilist/anilist-mal.ts`       |
+| Provider      | Style                                                | Main files                                                                                           |
+| ------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **HiAnime**   | hianime.at scrape + ZokoAnime XOR embed              | `hianime/hianime-stream-provider.ts`, `hianime/hianime-browser-fetch.ts`, `hianime/hianime-embed.ts` |
+| **AllAnime**  | GraphQL + embed resolution                           | `allanime/allanime-stream-provider.ts`, `allanime/allanime-gql.ts`                                   |
+| **AniDB**     | anidb.app browse/API + CF browser session (disabled) | `anidb/anidb-stream-provider.ts`, `anidb/anidb-browser-fetch.ts`                                     |
+| **AnimePahe** | HTML/API scrape + hidden browser for challenges      | `animepahe-stream-provider.ts`                                                                       |
+| **Reanime**   | REST API + Flixcloud decrypt + proxy upstream        | `reanime/reanime-stream-provider.ts`, `reanime/flixcloud-*.ts`                                       |
+| **Senshi**    | REST API → HLS (MAL-keyed)                           | `senshi/senshi-stream-provider.ts`, `anilist/anilist-mal.ts`                                         |
 
 ### REST / JSON API
 
@@ -226,6 +227,7 @@ The app uses [`electron-log`](https://www.npmjs.com/package/electron-log) (`src/
 
 In development, providers still log with tagged prefixes, e.g.:
 
+- `[hianime-provider]`, `[hianime-browser]`
 - `[allanime-stream]`
 - `[anidb-provider]`, `[anidb-browser]`
 - `[animepahe-provider]`
@@ -278,6 +280,7 @@ src/main/
     stream-provider-search.ts     # episodes + show details routing
     stream-providers/
       stream-provider.ts          # interface + registry
+      hianime/
       allanime/
       anidb/
       animepahe-stream-provider.ts

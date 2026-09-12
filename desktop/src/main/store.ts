@@ -4,6 +4,7 @@ interface AppStoreSchema {
   "anilist.accessToken"?: string;
   "privacy.incognito"?: boolean;
   "stream.provider"?:
+    | "hianime"
     | "allanime"
     | "anidb"
     | "animepahe"

@@ -15,6 +15,7 @@ function getNativeStreamProvider(
   provider: StreamProviderName
 ): NativeStreamProviderBridge | null {
   if (
+    provider === "hianime" ||
     provider === "anidb" ||
     provider === "animepahe" ||
     provider === "animeparadise" ||

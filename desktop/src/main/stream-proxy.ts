@@ -33,7 +33,11 @@ import { URL } from "url";
 
 import { getElectronUserAgent } from "@/main/electron-user-agent";
 import { fetchUpstream, normalizeStreamReferer } from "@/main/stream-proxy-upstream";
-import { convertAssToWebVtt, isAssSubtitleUrl } from "@/main/utils/ass-to-webvtt";
+import {
+  convertAssToWebVtt,
+  isAssSubtitleUrl,
+  isWebVttSubtitleUrl,
+} from "@/main/utils/ass-to-webvtt";
 import { filterHlsMasterToVariant } from "@/shared/utils/hls-master";
 import { isHlsPlaylistUrl } from "@/shared/utils/hls-url";
 
@@ -357,13 +361,7 @@ function handleStreamPassthrough(req: IncomingMessage, res: ServerResponse, pars
           referer: referer ?? null,
         });
       }
-      const resHeaders: Record<string, string> = {};
-      fetchRes.headers.forEach((v, k) => {
-        const lower = k.toLowerCase();
-        if (lower !== "transfer-encoding" && lower !== "connection" && lower !== "content-length") {
-          resHeaders[k] = v;
-        }
-      });
+      const resHeaders = copyUpstreamResponseHeaders(fetchRes.headers);
 
       // Only rewrite successful playlist responses. Passing 5xx error bodies through
       // the HLS rewriter confuses ffmpeg with a "5XX Server Error" on a fake playlist.
@@ -402,6 +400,7 @@ function handleStreamPassthrough(req: IncomingMessage, res: ServerResponse, pars
           getStreamProxyBaseUrl()
         );
         resHeaders["content-type"] = "application/vnd.apple.mpegurl; charset=utf-8";
+        applyProxyCorsHeaders(resHeaders);
         res.writeHead(status === 206 ? 206 : status, resHeaders);
         res.end(rewrittenBody);
         return;
@@ -412,12 +411,18 @@ function handleStreamPassthrough(req: IncomingMessage, res: ServerResponse, pars
         const assBody = await fetchRes.text();
         const vttBody = convertAssToWebVtt(assBody);
         resHeaders["content-type"] = "text/vtt; charset=utf-8";
-        delete resHeaders["content-encoding"];
+        applyProxyCorsHeaders(resHeaders);
         res.writeHead(200, resHeaders);
         res.end(vttBody);
         return;
       }
 
+      // Chromium <track> requires text/vtt. CDN often sends text/plain or octet-stream.
+      if (status < 400 && isWebVttSubtitleUrl(targetUrl)) {
+        resHeaders["content-type"] = "text/vtt; charset=utf-8";
+      }
+
+      applyProxyCorsHeaders(resHeaders);
       res.writeHead(status === 206 ? 206 : status, resHeaders);
       const body = fetchRes.body;
       if (!body) {
@@ -1441,6 +1446,45 @@ function resolveFfmpegPath(): string | null {
   }
 
   return null;
+}
+
+/** Upstream headers that must not be forwarded (hop-by-hop, encoding, CDN CORS). */
+const DROP_UPSTREAM_HEADERS = new Set([
+  "transfer-encoding",
+  "connection",
+  "keep-alive",
+  "content-length",
+  // fetch() decompresses; forwarding this would lie about the body we send.
+  "content-encoding",
+  // CDN ACAO (e.g. https://zokoanime.video) would override our * and block
+  // Chromium <track> loads from the renderer origin.
+  "access-control-allow-origin",
+  "access-control-allow-credentials",
+  "access-control-allow-headers",
+  "access-control-allow-methods",
+  "access-control-expose-headers",
+  "access-control-max-age",
+]);
+
+function copyUpstreamResponseHeaders(headers: Headers): Record<string, string> {
+  const resHeaders: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    if (DROP_UPSTREAM_HEADERS.has(key.toLowerCase())) return;
+    resHeaders[key] = value;
+  });
+  return resHeaders;
+}
+
+function applyProxyCorsHeaders(resHeaders: Record<string, string>): void {
+  for (const key of Object.keys(resHeaders)) {
+    if (key.toLowerCase().startsWith("access-control-")) {
+      delete resHeaders[key];
+    }
+  }
+  resHeaders["Access-Control-Allow-Origin"] = "*";
+  resHeaders["Access-Control-Allow-Methods"] = "GET,OPTIONS";
+  resHeaders["Access-Control-Allow-Headers"] =
+    "Range,Accept,Content-Type,Origin,Referer,User-Agent";
 }
 
 function setCorsHeaders(res: ServerResponse): void {

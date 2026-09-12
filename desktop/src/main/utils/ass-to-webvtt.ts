@@ -1,9 +1,19 @@
 /** True when the URL looks like an Advanced SubStation Alpha subtitle file. */
 export function isAssSubtitleUrl(url: string): boolean {
+  return subtitlePathMatches(url, /\.(ass|ssa)$/i);
+}
+
+/** True when the URL looks like a WebVTT subtitle file. */
+export function isWebVttSubtitleUrl(url: string): boolean {
+  return subtitlePathMatches(url, /\.vtt$/i);
+}
+
+function subtitlePathMatches(url: string, pattern: RegExp): boolean {
   try {
-    return /\.(ass|ssa)(?:$|\?)/i.test(new URL(url).pathname);
+    return pattern.test(new URL(url).pathname);
   } catch {
-    return /\.(ass|ssa)(?:$|[?#])/i.test(url);
+    const pathOnly = url.split(/[?#]/, 1)[0] ?? url;
+    return pattern.test(pathOnly);
   }
 }
 

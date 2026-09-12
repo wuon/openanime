@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import type { StreamProviderName } from "@/shared/stream-providers";
 import type { AniListShowDetails, ShowDetails } from "@/shared/types";
 
 type AnimeMode = "sub" | "dub";
@@ -154,7 +155,7 @@ function canonicalizeRichShowDetails(
 export function useShowDetails(
   animeId?: string,
   providerId?: string,
-  providerOverride?: "allanime" | "anidb" | "animepahe" | "animeparadise" | "reanime" | "senshi"
+  providerOverride?: StreamProviderName
 ): UseShowDetailsResult {
   const [details, setDetails] = useState<RichShowDetails | null>(null);
   const [episodesByMode, setEpisodesByMode] = useState<Record<AnimeMode, EpisodesState>>({
