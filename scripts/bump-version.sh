@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ./scripts/bump-version.sh [major|minor|patch]
-# Defaults to patch bump.
+# Usage: ./scripts/bump-version.sh [major|minor|fix]
+# If no bump type is given, prompts to choose.
 #
 # Updates the version in:
 #   - desktop/package.json
 #   - desktop/package-lock.json
 #   - README.md (all download links)
 #   - landing/components/hero.tsx (fallback download URLs)
-# Then commits with message: release: vX.Y.Z-alpha
+# Then commits with message: release: vX.Y.Z
 
-BUMP="${1:-patch}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # ---------------------------------------------------------------------------
@@ -20,9 +19,33 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CURRENT_VERSION=$(node -p "require('${ROOT}/desktop/package.json').version")
 echo "Current version: ${CURRENT_VERSION}"
 
-# Strip the -alpha suffix to work with semver parts
+# Strip a leftover -alpha suffix if present
 BASE_VERSION="${CURRENT_VERSION%-alpha}"
 IFS='.' read -r MAJOR MINOR PATCH <<< "${BASE_VERSION}"
+
+# ---------------------------------------------------------------------------
+# Choose bump type
+# ---------------------------------------------------------------------------
+if [[ -n "${1:-}" ]]; then
+  BUMP="${1}"
+else
+  echo ""
+  echo "Select bump type:"
+  echo "  1) major  → $((MAJOR + 1)).0.0"
+  echo "  2) minor  → ${MAJOR}.$((MINOR + 1)).0"
+  echo "  3) fix    → ${MAJOR}.${MINOR}.$((PATCH + 1))"
+  echo ""
+  read -r -p "Choice [1/2/3]: " CHOICE
+  case "${CHOICE}" in
+    1|major) BUMP="major" ;;
+    2|minor) BUMP="minor" ;;
+    3|fix|patch) BUMP="fix" ;;
+    *)
+      echo "Unknown choice '${CHOICE}'. Use: 1, 2, 3 (or major | minor | fix)" >&2
+      exit 1
+      ;;
+  esac
+fi
 
 # ---------------------------------------------------------------------------
 # Compute new version
@@ -37,16 +60,16 @@ case "${BUMP}" in
     MINOR=$((MINOR + 1))
     PATCH=0
     ;;
-  patch)
+  fix|patch)
     PATCH=$((PATCH + 1))
     ;;
   *)
-    echo "Unknown bump type '${BUMP}'. Use: major | minor | patch" >&2
+    echo "Unknown bump type '${BUMP}'. Use: major | minor | fix" >&2
     exit 1
     ;;
 esac
 
-NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}-alpha"
+NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
 echo "New version:     ${NEW_VERSION}"
 
 # ---------------------------------------------------------------------------
