@@ -6,6 +6,7 @@ import { appStore } from "@/main/store";
 import type { SearchFilterValues } from "@/shared/search-filters";
 import { resolveEnabledStreamProvider } from "@/shared/stream-providers";
 import {
+  buildLocalProxyInputUrl,
   getStreamProxyBaseUrl,
   getTranscodeProgress,
   prepareTranscodedStream,
@@ -96,11 +97,7 @@ export function addStreamProviderListeners() {
   ipcMain.handle(
     STREAM_PROVIDER_PREPARE_TRANSCODE_CHANNEL,
     async (_event, targetUrl: string, referer: string | null, variant?: string | null) => {
-      const variantQuery =
-        variant && variant.trim()
-          ? `&variant=${encodeURIComponent(variant.trim())}`
-          : "";
-      const localProxyInputUrl = `${getStreamProxyBaseUrl()}/stream/playlist.m3u8?url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(referer ?? "")}${variantQuery}`;
+      const localProxyInputUrl = buildLocalProxyInputUrl(targetUrl, referer, variant ?? null);
       await prepareTranscodedStream(localProxyInputUrl, targetUrl, referer, variant ?? null);
       return true;
     }
