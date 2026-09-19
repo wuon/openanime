@@ -79,6 +79,9 @@ function resolveAniListMediaId(
   providerId: string | undefined,
   streamDetails: ShowDetails
 ): number | null {
+  const fromExplicit = asPositiveInt(streamDetails.anilistId);
+  if (fromExplicit != null) return fromExplicit;
+
   const streamId = asPositiveInt(streamDetails.id);
   if (streamId != null && streamDetails.id !== streamDetails.providerId) {
     return streamId;

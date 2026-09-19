@@ -94,6 +94,7 @@ export interface ShowDetails {
   thumbnail: string | null;
   type: string;
   description?: string | null;
+  anilistId?: string | null;
 }
 
 export async function getShowDetails(

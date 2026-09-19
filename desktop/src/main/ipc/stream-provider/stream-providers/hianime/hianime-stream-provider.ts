@@ -270,15 +270,23 @@ function extractDescriptionFromHtml(html: string): string | null {
 }
 
 function extractMalIdFromHtml(html: string): number | null {
-  const match = /https?:\/\/(?:www\.)?myanimelist\.net\/anime\/(\d+)/i.exec(html);
+  const match =
+    /https?:\/\/(?:www\.)?myanimelist\.net\/anime\/(\d+)/i.exec(html) ??
+    /href=["'][^"']*myanimelist\.net\/anime\/(\d+)/i.exec(html);
   if (!match?.[1]) return null;
   const id = Number(match[1]);
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
 function extractAniListIdFromHtml(html: string): string | null {
-  const match = /https?:\/\/(?:www\.)?anilist\.co\/anime\/(\d+)/i.exec(html);
+  const match =
+    /https?:\/\/(?:www\.)?anilist\.co\/anime\/(\d+)/i.exec(html) ??
+    /href=["'][^"']*anilist\.co\/anime\/(\d+)/i.exec(html);
   return match?.[1] ?? null;
+}
+
+function asAniListIdString(value: number | null): string | null {
+  return value != null ? String(value) : null;
 }
 
 function resolvePlaylistUri(masterUrl: string, uri: string): string {
@@ -322,6 +330,7 @@ export class HianimeStreamProvider implements StreamProvider {
   >();
   private readonly episodesInFlight = new Map<string, Promise<HianimeEpisodeRow[]>>();
   private readonly episodesCacheTtlMs = 5 * 60_000;
+  private readonly anilistIdBySlug = new Map<string, string>();
 
   private log(event: string, meta?: Record<string, unknown>): void {
     if (!IS_DEV) return;
@@ -378,6 +387,47 @@ export class HianimeStreamProvider implements StreamProvider {
       throw new Error(`HiAnime episode ${episodeNumber} not found for ${providerId}`);
     }
     return match.id;
+  }
+
+  private rememberAniListId(slug: string, anilistId: string | null): void {
+    if (anilistId) this.anilistIdBySlug.set(slug, anilistId);
+  }
+
+  private async mapMalToAniListId(malId: number | null): Promise<string | null> {
+    if (malId == null) return null;
+    return asAniListIdString(await resolveAniListIdFromMal(malId));
+  }
+
+  /**
+   * ZokoAnime embed URLs carry `/mal/{id}/`. HiAnime info pages often omit AniList/MAL
+   * links, so the episode-server hash is the reliable external id.
+   */
+  private async resolveMalIdFromZokoServers(slug: string): Promise<number | null> {
+    try {
+      const episodes = await this.fetchEpisodes(slug);
+      const first = episodes[0];
+      if (!first) return null;
+      const serversHtml = await fetchHianimeText(
+        `${HIANIME_BASE}/api/theme/episode/servers?episodeId=${encodeURIComponent(first.id)}`,
+        { Accept: "application/json, text/html, */*" }
+      );
+      for (const mode of ["sub", "dub"] as const) {
+        const hash = parseZokoHash(serversHtml, mode);
+        if (!hash) continue;
+        try {
+          const malId = extractMalIdFromEmbed(decodeEmbedHash(hash));
+          if (malId != null) return malId;
+        } catch {
+          // try the other mode
+        }
+      }
+    } catch (error: unknown) {
+      this.log("details:mal-from-servers-failed", {
+        providerId: slug,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+    return null;
   }
 
   private async latestEpisodeNumber(providerId: string): Promise<number> {
@@ -520,6 +570,7 @@ export class HianimeStreamProvider implements StreamProvider {
     thumbnail: string | null;
     type: string;
     description: string | null;
+    anilistId?: string | null;
   }> {
     const startedAt = Date.now();
     const slug = hianimeSlug(providerId);
@@ -528,29 +579,42 @@ export class HianimeStreamProvider implements StreamProvider {
     let name = slug;
     let thumbnail: string | null = null;
     let description: string | null = null;
-    let anilistId: string | null = null;
+    let anilistId: string | null = this.anilistIdBySlug.get(slug) ?? null;
     let malId: number | null = null;
 
-    try {
-      const html = await fetchHianimeText(`${HIANIME_BASE}/${encodeURIComponent(slug)}`, {
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      });
-      name = extractTitleFromHtml(html) || name;
-      thumbnail = absoluteUrl(extractMeta(html, "og:image"));
-      description = extractDescriptionFromHtml(html);
-      anilistId = extractAniListIdFromHtml(html);
-      malId = extractMalIdFromHtml(html);
-    } catch (error: unknown) {
-      this.log("details:page-failed", {
-        providerId: slug,
-        message: error instanceof Error ? error.message : String(error),
-      });
+    const pageAccept = {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    };
+    const pageUrls = [
+      `${HIANIME_BASE}/${encodeURIComponent(slug)}`,
+      `${HIANIME_BASE}/watch/${encodeURIComponent(slug)}`,
+    ];
+
+    for (const url of pageUrls) {
+      try {
+        const html = await fetchHianimeText(url, pageAccept);
+        name = extractTitleFromHtml(html) || name;
+        thumbnail = absoluteUrl(extractMeta(html, "og:image")) ?? thumbnail;
+        description = extractDescriptionFromHtml(html) ?? description;
+        anilistId = extractAniListIdFromHtml(html) ?? anilistId;
+        malId = extractMalIdFromHtml(html) ?? malId;
+        break;
+      } catch (error: unknown) {
+        this.log("details:page-failed", {
+          providerId: slug,
+          url,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
-    if (!anilistId && malId != null) {
-      const mapped = await resolveAniListIdFromMal(malId);
-      if (mapped != null) anilistId = String(mapped);
+    if (!anilistId && malId == null) {
+      malId = await this.resolveMalIdFromZokoServers(slug);
     }
+    if (!anilistId) {
+      anilistId = await this.mapMalToAniListId(malId);
+    }
+    this.rememberAniListId(slug, anilistId);
 
     const result = {
       id: anilistId ?? slug,
@@ -559,6 +623,7 @@ export class HianimeStreamProvider implements StreamProvider {
       thumbnail,
       type: "TV",
       description,
+      anilistId,
     };
     this.log("details:done", {
       providerId: slug,
@@ -609,6 +674,13 @@ export class HianimeStreamProvider implements StreamProvider {
     const embedUrl = decodeEmbedHash(hash);
     const refr = embedOriginReferer(embedUrl);
     const malId = extractMalIdFromEmbed(embedUrl);
+    const cachedAniListId = this.anilistIdBySlug.get(slug) ?? null;
+    const anilistResolve = cachedAniListId
+      ? Promise.resolve(cachedAniListId)
+      : this.mapMalToAniListId(malId).then((id) => {
+          this.rememberAniListId(slug, id);
+          return id;
+        });
     const embedHtml = await fetchHianimeText(embedUrl, {
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       Referer: HIANIME_REFERER,
@@ -647,12 +719,16 @@ export class HianimeStreamProvider implements StreamProvider {
       });
     }
 
+    const anilistId = await anilistResolve;
+    const anilistMediaId = anilistId != null ? Number(anilistId) : undefined;
+
     this.log("stream:done", {
       providerId: slug,
       episode: episodeNumber,
       mode,
       episodeId,
       malId,
+      anilistId,
       urlPreview: config.masterUrl.slice(0, 96),
       subtitles: config.subtitles.map((t) => t.language),
       qualities: qualities?.map((q) => q.label) ?? null,
@@ -665,6 +741,10 @@ export class HianimeStreamProvider implements StreamProvider {
       subtitles: config.subtitles.length > 0 ? config.subtitles : undefined,
       qualities,
       selectedQuality,
+      anilistMediaId:
+        anilistMediaId != null && Number.isInteger(anilistMediaId) && anilistMediaId > 0
+          ? anilistMediaId
+          : undefined,
     };
   }
 }

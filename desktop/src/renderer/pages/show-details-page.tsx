@@ -127,10 +127,10 @@ export function ShowDetailsPage() {
     setActiveMode(anime?.mode ?? "sub");
   }, [anime?.id, anime?.mode]);
 
-  const mediaId = Number(id);
-  const hasAniListId = Number.isInteger(mediaId) && mediaId > 0;
-
   const { details, episodesByMode, loading, error } = useShowDetails(id, anime?.providerId);
+
+  const anilistMediaId = details?.anilistMediaId ?? null;
+  const hasAniListId = anilistMediaId != null && anilistMediaId > 0;
 
   useEffect(() => {
     const nextSubEpisodes =
@@ -339,9 +339,9 @@ export function ShowDetailsPage() {
                   <Play className="h-4 w-4 fill-current" />
                   Watch Now
                 </Button>
-                {hasAniListId && (
+                {hasAniListId && anilistMediaId != null && (
                   <AniListListControls
-                    mediaId={mediaId}
+                    mediaId={anilistMediaId}
                     listEntryId={details?.anilistListEntry?.id}
                     listStatus={
                       details?.anilistListEntry?.status as AniListMediaListStatus | undefined

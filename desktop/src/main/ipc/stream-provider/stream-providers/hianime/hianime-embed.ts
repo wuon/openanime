@@ -130,7 +130,7 @@ export function embedOriginReferer(embedUrl: string): string {
 }
 
 export function extractMalIdFromEmbed(embedUrl: string): number | null {
-  const match = /\/mal\/(\d+)\//i.exec(embedUrl);
+  const match = /\/mal\/(\d+)(?:\/|$|\?|#)/i.exec(embedUrl) ?? /\/mal\/(\d+)/i.exec(embedUrl);
   if (!match?.[1]) return null;
   const id = Number(match[1]);
   return Number.isInteger(id) && id > 0 ? id : null;

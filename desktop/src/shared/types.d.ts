@@ -97,6 +97,7 @@ interface StreamUrlResult {
   }>;
   qualities?: StreamQualityOption[];
   selectedQuality?: string;
+  anilistMediaId?: number;
 }
 
 interface TranscodeProgressResult {
@@ -112,6 +113,7 @@ interface ShowDetails {
   thumbnail: string | null;
   type: string;
   description?: string | null;
+  anilistId?: string | null;
 }
 
 export interface AniListShowDetails {

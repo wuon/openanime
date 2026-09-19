@@ -329,7 +329,7 @@ export function WatchPage() {
         );
       }
       try {
-        const { url, referer, subtitles, qualities, selectedQuality: defaultQuality } =
+        const { url, referer, subtitles, qualities, selectedQuality: defaultQuality, anilistMediaId } =
           await window.streamProvider.getStreamUrl(
             episode.id,
             episode.providerId,
@@ -337,6 +337,12 @@ export function WatchPage() {
             episode.mode,
             streamProviderOverride
           );
+        if (anilistMediaId != null && Number.isInteger(anilistMediaId) && anilistMediaId > 0) {
+          const prev = anilistListRef.current;
+          if (prev?.mediaId !== anilistMediaId) {
+            anilistListRef.current = { mediaId: anilistMediaId };
+          }
+        }
         historyProviderRef.current =
           streamProviderOverride ?? (await window.streamProvider.getActiveProvider());
         const base = await window.streamProvider.getStreamProxyBaseUrl();
@@ -502,7 +508,10 @@ export function WatchPage() {
       next.totalEpisodes = totalEpisodes;
     }
     anilistListRef.current = next;
-  }, [showLoading, showDetails]);
+    if (playUrl) {
+      void syncAniListProgress(currentEpisode);
+    }
+  }, [showLoading, showDetails, playUrl, currentEpisode, syncAniListProgress]);
 
   useEffect(() => {
     if (!episode) return;

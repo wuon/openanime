@@ -35,6 +35,8 @@ export interface StreamUrlResult {
   qualities?: StreamQualityOption[];
   /** Default/selected quality id from `qualities` (highest when omitted by callers). */
   selectedQuality?: string;
+  /** AniList media id when the provider can resolve one (e.g. HiAnime embed MAL). */
+  anilistMediaId?: number;
 }
 
 export type StreamMode = "sub" | "dub";
