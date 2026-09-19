@@ -6,8 +6,13 @@
  *   GET /stream?url=<targetUrl>&referer=<referer>
  *   GET /stream/playlist.m3u8?url=<targetUrl>&referer=<referer>
  *   GET /stream/segment.ts?url=<targetUrl>&referer=<referer>
+ *   GET /stream/playlist.m3u8?u=<opaqueId>
+ *   GET /stream/segment.ts?u=<opaqueId>
  *     Pass-through proxy. Rewrites HLS manifests to keep segments going through us.
  *     Playlist/segment path suffixes help ffmpeg accept proxied HLS URLs.
+ *     Opaque `u=` ids are used in rewritten playlists (and ffmpeg -i URLs) so
+ *     Windows ffmpeg cannot truncate nested CDN hosts that look like scientific
+ *     notation (e.g. hls.1embed.buzz → https://hls.1).
  *
  *   GET /transcode/playlist.m3u8?url=<targetUrl>&referer=<referer>
  *     Returns a synthesized VOD HLS playlist immediately. Duration is probed up
@@ -50,7 +55,9 @@ let resolvedFfmpegPath = resolveFfmpegPath();
 
 // Bump when the on-disk segment layout / PTS scheme changes so old cached
 // segments don't get served to the player with the new playlist semantics.
-const TRANSCODE_CACHE_VERSION = "v1";
+// v2: invalidate Windows builds that cached wrong-content segments from broken
+// HLS `-ss` seeks / truncated CDN URLs.
+const TRANSCODE_CACHE_VERSION = "v2";
 const transcodeCacheDir = path.join(tmpdir(), "openanime-transcode-cache", TRANSCODE_CACHE_VERSION);
 
 const HLS_SEGMENT_DURATION_SECONDS = 6;
@@ -122,6 +129,76 @@ interface HlsSession {
 const hlsSessions = new Map<string, HlsSession>();
 const hlsSessionInits = new Map<string, Promise<HlsSession>>();
 const transcodeProgress = new Map<string, TranscodeProgressSnapshot>();
+
+/** Upstream URL+referer lookups for opaque `?u=` playlist/segment links. */
+interface UpstreamTarget {
+  url: string;
+  referer: string | null;
+}
+
+const MAX_UPSTREAM_TARGETS = 4096;
+const upstreamTargets = new Map<string, UpstreamTarget>();
+const upstreamTargetIdsByKey = new Map<string, string>();
+
+function upstreamTargetKey(url: string, referer: string | null): string {
+  return `${url}\0${referer ?? ""}`;
+}
+
+/**
+ * Register an upstream URL for opaque proxy links. Ids are letter-prefixed hex so
+ * Windows ffmpeg cannot mis-parse them as scientific notation (unlike hosts like
+ * hls.1embed.buzz embedded in ?url=).
+ */
+function registerUpstreamTarget(url: string, referer: string | null): string {
+  const key = upstreamTargetKey(url, referer);
+  const existing = upstreamTargetIdsByKey.get(key);
+  if (existing && upstreamTargets.has(existing)) return existing;
+
+  while (upstreamTargets.size >= MAX_UPSTREAM_TARGETS) {
+    const oldestId = upstreamTargets.keys().next().value;
+    if (!oldestId) break;
+    const oldest = upstreamTargets.get(oldestId);
+    upstreamTargets.delete(oldestId);
+    if (oldest) {
+      const oldKey = upstreamTargetKey(oldest.url, oldest.referer);
+      if (upstreamTargetIdsByKey.get(oldKey) === oldestId) {
+        upstreamTargetIdsByKey.delete(oldKey);
+      }
+    }
+  }
+
+  const id = `t${createHash("sha1").update(key).digest("hex").slice(0, 20)}`;
+  upstreamTargets.set(id, { url, referer });
+  upstreamTargetIdsByKey.set(key, id);
+  return id;
+}
+
+function resolveStreamTarget(parsed: URL): {
+  targetUrl: string;
+  referer: string | null;
+  variant: string | null;
+} | null {
+  const variant = parsed.searchParams.get("variant");
+  const opaqueId = parsed.searchParams.get("u");
+  if (opaqueId) {
+    const target = upstreamTargets.get(opaqueId);
+    if (!target) return null;
+    return {
+      targetUrl: target.url,
+      referer: normalizeStreamReferer(target.url, target.referer),
+      variant,
+    };
+  }
+
+  const targetUrl = parsed.searchParams.get("url");
+  if (!targetUrl) return null;
+  const rawReferer = parsed.searchParams.get("referer");
+  return {
+    targetUrl,
+    referer: normalizeStreamReferer(targetUrl, rawReferer),
+    variant,
+  };
+}
 
 function getInputPermissiveHlsArgs(): string[] {
   const args = [
@@ -313,16 +390,18 @@ function handleStreamRequest(req: IncomingMessage, res: ServerResponse): void {
 }
 
 function handleStreamPassthrough(req: IncomingMessage, res: ServerResponse, parsed: URL): void {
-  const targetUrl = parsed.searchParams.get("url");
-  const rawReferer = parsed.searchParams.get("referer");
-  const variant = parsed.searchParams.get("variant");
-  const referer = targetUrl ? normalizeStreamReferer(targetUrl, rawReferer) : rawReferer;
-
-  if (!targetUrl) {
-    res.writeHead(400);
-    res.end("Missing url parameter");
+  const resolved = resolveStreamTarget(parsed);
+  if (!resolved) {
+    const missingOpaque = Boolean(parsed.searchParams.get("u"));
+    res.writeHead(missingOpaque ? 404 : 400);
+    res.end(missingOpaque ? "Unknown stream target" : "Missing url parameter");
     return;
   }
+
+  const { targetUrl, referer, variant } = resolved;
+  const rawReferer = parsed.searchParams.get("referer");
+  const startSegRaw = parsed.searchParams.get("startSeg");
+  const startSegment = startSegRaw ? Math.max(0, Number.parseInt(startSegRaw, 10) || 0) : 0;
 
   const range = req.headers.range;
   const headers: Record<string, string> = {
@@ -397,7 +476,8 @@ function handleStreamPassthrough(req: IncomingMessage, res: ServerResponse, pars
           manifestBody,
           targetUrl,
           referer,
-          getStreamProxyBaseUrl()
+          getStreamProxyBaseUrl(),
+          startSegment
         );
         resHeaders["content-type"] = "application/vnd.apple.mpegurl; charset=utf-8";
         applyProxyCorsHeaders(resHeaders);
@@ -560,15 +640,28 @@ async function handleSegmentRequest(
   }
 }
 
-function buildLocalProxyInputUrl(
+export function buildLocalProxyInputUrl(
   targetUrl: string,
   referer: string | null,
-  variant: string | null = null
+  variant: string | null = null,
+  startSegment = 0
 ): string {
-  // Use a .m3u8 path so ffmpeg's HLS demuxer accepts the proxied playlist.
-  const variantQuery =
-    variant && variant.trim() ? `&variant=${encodeURIComponent(variant.trim())}` : "";
-  return `${getStreamProxyBaseUrl()}/stream/playlist.m3u8?url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(referer ?? "")}${variantQuery}`;
+  // Opaque id so Windows ffmpeg never sees nested CDN hosts in ?url= (e.g. .1e…).
+  const id = registerUpstreamTarget(targetUrl, referer);
+  const params = new URLSearchParams();
+  params.set("u", id);
+  if (variant && variant.trim()) params.set("variant", variant.trim());
+  // Prefer playlist clipping over `-ss` — Windows ffmpeg HLS input seeking is
+  // unreliable (observed seeks to unrelated PTS like 759s when asking for 6s).
+  if (startSegment > 0) params.set("startSeg", String(startSegment));
+  return `${getStreamProxyBaseUrl()}/stream/playlist.m3u8?${params.toString()}`;
+}
+
+function withPlaylistStartSegment(inputUrl: string, startSegment: number): string {
+  const parsed = new URL(inputUrl);
+  if (startSegment > 0) parsed.searchParams.set("startSeg", String(startSegment));
+  else parsed.searchParams.delete("startSeg");
+  return parsed.toString();
 }
 
 function buildVodPlaylist(
@@ -903,15 +996,19 @@ function startSequentialJob(session: HlsSession, startSegment: number): HlsSeque
   // input PTS, then use `-output_ts_offset` to anchor the *output* timeline
   // at the segment's expected start time. That gives every restart-produced
   // fragment a PTS that matches its filename / position in the playlist.
+  //
+  // Do NOT use `-ss` on HLS inputs: on Windows it frequently seeks to the wrong
+  // stream timestamp (e.g. native PTS ~759 instead of playlist time 6). Instead
+  // clip the proxied media playlist so ffmpeg starts at the first needed URI.
+  const inputUrl = withPlaylistStartSegment(session.inputUrl, startSegment);
   const args: string[] = [
     "-hide_banner",
     "-loglevel",
     "warning",
     "-nostats",
-    ...(startSegment > 0 ? ["-ss", startTime.toFixed(3)] : []),
     ...getInputPermissiveHlsArgs(),
     "-i",
-    session.inputUrl,
+    inputUrl,
     "-map",
     "0:v:0",
     "-map",
@@ -956,6 +1053,7 @@ function startSequentialJob(session: HlsSession, startSegment: number): HlsSeque
       startSegment,
       startTimeSeconds: startSegment > 0 ? startTime.toFixed(3) : 0,
       segmentCount: session.segmentCount,
+      inputStartSeg: startSegment,
     });
   }
 
@@ -1177,9 +1275,10 @@ function isTranscoderRestartedError(err: unknown): boolean {
 
 /**
  * Sentinel: ffmpeg exited cleanly without producing the requested segment.
- * Almost always means `-ss <time>` overshot the actual end of the upstream
- * stream — usually a duration mis-probe or the player requested a segment past
- * the end. We return 410 Gone for these so hls.js stops retrying immediately.
+ * Almost always means the clipped start offset overshot the actual end of the
+ * upstream stream — usually a duration mis-probe or the player requested a
+ * segment past the end. We return 410 Gone for these so hls.js stops retrying
+ * immediately.
  */
 class PastEofError extends Error {
   readonly isPastEof = true;
@@ -1506,36 +1605,141 @@ function rewriteHlsManifest(
   manifest: string,
   manifestUrl: string,
   referer: string | null,
-  proxyBaseUrl: string
+  proxyBaseUrl: string,
+  startSegment = 0
 ): string {
   const effectiveReferer =
     typeof referer === "string" && referer.trim().length > 0 ? referer : manifestUrl;
 
-  const toProxyUrl = (rawUri: string): string => {
+  const isMaster = manifest.includes("#EXT-X-STREAM-INF");
+  // Clip media playlists before rewriting so we only register opaque ids for
+  // segments ffmpeg will actually fetch.
+  const source =
+    !isMaster && startSegment > 0 ? trimHlsMediaPlaylist(manifest, startSegment) : manifest;
+
+  const toProxyUrl = (rawUri: string, forwardStartSeg: boolean): string => {
     const trimmed = rawUri.trim();
     if (!trimmed || trimmed.startsWith("data:") || trimmed.startsWith("blob:")) return rawUri;
     const absolute = toAbsoluteUrl(trimmed, manifestUrl);
     // Give proxied playlists/segments real extensions so ffmpeg (and picky HLS
     // demuxers) don't reject extensionless `/stream` URLs.
     const proxyPath = isHlsPlaylistUrl(absolute) ? "/stream/playlist.m3u8" : "/stream/segment.ts";
-    return `${proxyBaseUrl}${proxyPath}?url=${encodeURIComponent(absolute)}&referer=${encodeURIComponent(effectiveReferer)}`;
+    // Opaque ids only — never embed the CDN URL. Windows ffmpeg truncates hosts
+    // that look like scientific notation (hls.1embed.buzz → https://hls.1).
+    const id = registerUpstreamTarget(absolute, effectiveReferer);
+    const params = new URLSearchParams();
+    params.set("u", id);
+    // Forward startSeg only onto child playlists (master → media), not onto
+    // audio/subtitle URI= attributes or media segments.
+    if (forwardStartSeg && startSegment > 0 && isHlsPlaylistUrl(absolute)) {
+      params.set("startSeg", String(startSegment));
+    }
+    return `${proxyBaseUrl}${proxyPath}?${params.toString()}`;
   };
 
-  return manifest
+  return source
     .split(/\r?\n/)
     .map((line) => {
       if (!line) return line;
 
       if (line.startsWith("#")) {
         if (line.includes('URI="')) {
-          return line.replace(/URI="([^"]+)"/g, (_m, uri: string) => `URI="${toProxyUrl(uri)}"`);
+          // Keys / audio / subs — do not forward startSeg.
+          return line.replace(
+            /URI="([^"]+)"/g,
+            (_m, uri: string) => `URI="${toProxyUrl(uri, false)}"`
+          );
         }
         return line;
       }
 
-      return toProxyUrl(line);
+      // Bare URI: variant playlist line or media segment.
+      return toProxyUrl(line, true);
     })
     .join("\n");
+}
+
+/**
+ * Drop the first `startSegment` media segments so ffmpeg can start mid-stream
+ * without `-ss` (unreliable on Windows HLS demuxers).
+ */
+function trimHlsMediaPlaylist(manifest: string, startSegment: number): string {
+  if (startSegment <= 0) return manifest;
+
+  const lines = manifest.split(/\r?\n/);
+  const out: string[] = [];
+  let skipped = 0;
+  let lastKey: string | null = null;
+  let lastMap: string | null = null;
+  let injectedCarry = false;
+  let wroteMediaSequence = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+
+    if (line.startsWith("#EXT-X-KEY:")) {
+      lastKey = line;
+      // Before the first kept EXTINF we only track state; inject at EXTINF.
+      if (skipped >= startSegment && injectedCarry) out.push(line);
+      continue;
+    }
+    if (line.startsWith("#EXT-X-MAP:")) {
+      lastMap = line;
+      if (skipped >= startSegment && injectedCarry) out.push(line);
+      continue;
+    }
+    if (line.startsWith("#EXT-X-MEDIA-SEQUENCE:")) {
+      const cur = Number(line.slice("#EXT-X-MEDIA-SEQUENCE:".length).trim());
+      const base = Number.isFinite(cur) ? cur : 0;
+      out.push(`#EXT-X-MEDIA-SEQUENCE:${String(base + startSegment)}`);
+      wroteMediaSequence = true;
+      continue;
+    }
+    if (line.startsWith("#EXTINF:")) {
+      if (skipped < startSegment) {
+        skipped += 1;
+        i += 1;
+        while (i < lines.length) {
+          const next = lines[i] ?? "";
+          if (next.startsWith("#EXT-X-BYTERANGE")) {
+            i += 1;
+            continue;
+          }
+          if (next.trim() === "") {
+            i += 1;
+            continue;
+          }
+          // Skip the segment URI line.
+          if (!next.startsWith("#")) break;
+          break;
+        }
+        continue;
+      }
+      if (!injectedCarry) {
+        if (lastMap) out.push(lastMap);
+        if (lastKey) out.push(lastKey);
+        injectedCarry = true;
+      }
+      out.push(line);
+      continue;
+    }
+    if (skipped < startSegment) {
+      if (
+        line.startsWith("#EXT-X-DISCONTINUITY") ||
+        line.startsWith("#EXT-X-PROGRAM-DATE-TIME")
+      ) {
+        continue;
+      }
+    }
+    out.push(line);
+  }
+
+  if (!wroteMediaSequence) {
+    const extIdx = out.findIndex((l) => l.startsWith("#EXTM3U"));
+    out.splice(extIdx >= 0 ? extIdx + 1 : 0, 0, `#EXT-X-MEDIA-SEQUENCE:${String(startSegment)}`);
+  }
+
+  return out.join("\n");
 }
 
 function toAbsoluteUrl(url: string, baseUrl: string): string {
