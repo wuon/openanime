@@ -14,6 +14,7 @@ const CHALLENGE_TIMEOUT_MS = 70_000;
 let browserWindow: BrowserWindow | null = null;
 let warmSessionPromise: Promise<BrowserWindow> | null = null;
 let fetchQueue: Promise<unknown> = Promise.resolve();
+let browserClosed = false;
 
 function log(event: string, meta?: Record<string, unknown>): void {
   if (!IS_DEV) return;
@@ -23,6 +24,27 @@ function log(event: string, meta?: Record<string, unknown>): void {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function discardBrowserWindow(win: BrowserWindow | null): void {
+  if (win && !win.isDestroyed()) {
+    win.destroy();
+  }
+}
+
+function throwIfBrowserClosed(): void {
+  if (browserClosed) {
+    throw new Error("anidb browser session was closed");
+  }
+}
+
+/** Destroy the warmed hidden window so closing the app is not blocked. */
+export function destroyAnidbBrowser(): void {
+  browserClosed = true;
+  const win = browserWindow;
+  browserWindow = null;
+  warmSessionPromise = null;
+  discardBrowserWindow(win);
 }
 
 function looksLikeCfBlock(text: string): boolean {
@@ -39,6 +61,9 @@ function looksLikeCfBlock(text: string): boolean {
 async function waitChallenge(win: BrowserWindow, timeoutMs = CHALLENGE_TIMEOUT_MS): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
+    if (win.isDestroyed() || browserClosed) {
+      throw new Error("anidb browser session was closed");
+    }
     const state = (await win.webContents.executeJavaScript(
       `(() => {
         const t = String(document.title || "").toLowerCase();
@@ -69,6 +94,7 @@ async function warmAnidbBrowser(): Promise<BrowserWindow> {
     return browserWindow;
   }
 
+  throwIfBrowserClosed();
   const startedAt = Date.now();
   const userAgent = getElectronUserAgent();
   log("browser:warm:start");
@@ -81,11 +107,20 @@ async function warmAnidbBrowser(): Promise<BrowserWindow> {
     },
   });
 
+  if (browserClosed) {
+    discardBrowserWindow(win);
+    throwIfBrowserClosed();
+  }
+
   await win.loadURL(ANIDB_REFERER, {
     userAgent,
     httpReferrer: ANIDB_REFERER,
   });
   await waitChallenge(win);
+  if (browserClosed) {
+    discardBrowserWindow(win);
+    throwIfBrowserClosed();
+  }
   browserWindow = win;
   log("browser:warm:done", { ms: Date.now() - startedAt });
   return win;
@@ -96,6 +131,7 @@ async function getAnidbBrowser(): Promise<BrowserWindow> {
   if (existing && !existing.isDestroyed()) {
     return existing;
   }
+  throwIfBrowserClosed();
 
   const inFlight = warmSessionPromise;
   if (inFlight !== null) {

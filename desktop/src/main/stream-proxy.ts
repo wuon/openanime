@@ -230,6 +230,19 @@ export function startStreamProxy(): Promise<number> {
   });
 }
 
+/** Stop ffmpeg jobs and the local HTTP proxy so the process can exit. */
+export function stopStreamProxy(): void {
+  shutdownTranscodeJobs();
+  const active = server;
+  if (!active) return;
+  server = null;
+  proxyPort = 0;
+  active.close();
+  if (typeof active.closeAllConnections === "function") {
+    active.closeAllConnections();
+  }
+}
+
 export function getStreamProxyPort(): number {
   return proxyPort;
 }

@@ -6,9 +6,10 @@ import { type IUpdateElectronAppOptions, updateElectronApp } from "update-electr
 
 import { initElectronUserAgent } from "@/main/electron-user-agent";
 import { APP_PROTOCOL, completeAniListOAuthFromDeepLink } from "@/main/ipc/anilist/anilist-oauth";
-import { registerListeners, unregisterListeners } from "@/main/ipc/listeners";
+import { registerListeners } from "@/main/ipc/listeners";
 import { initLogger } from "@/main/logger";
-import { shutdownTranscodeJobs, startStreamProxy } from "@/main/stream-proxy";
+import { isAppShuttingDown, shutdownBackgroundResources } from "@/main/shutdown";
+import { startStreamProxy } from "@/main/stream-proxy";
 
 initLogger();
 
@@ -78,6 +79,11 @@ const createWindow = () => {
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools();
   }
+
+  mainWindow.on("closed", () => {
+    shutdownBackgroundResources();
+    app.quit();
+  });
 };
 
 // This method will be called when Electron has finished
@@ -97,22 +103,21 @@ app.on("ready", () => {
   });
 });
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
+// Hidden provider windows are destroyed on shutdown so this event can fire
+// after the user closes the visible window. We quit on all platforms.
 app.on("window-all-closed", () => {
-  unregisterListeners();
-  shutdownTranscodeJobs();
+  shutdownBackgroundResources();
   app.quit();
 });
 
 app.on("before-quit", () => {
-  shutdownTranscodeJobs();
+  shutdownBackgroundResources();
 });
 
 app.on("activate", () => {
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
+  if (isAppShuttingDown()) return;
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }

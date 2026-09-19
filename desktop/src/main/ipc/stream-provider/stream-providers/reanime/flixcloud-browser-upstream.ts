@@ -15,6 +15,7 @@ const CHALLENGE_TIMEOUT_MS = 45_000;
 let browserWindow: BrowserWindow | null = null;
 let warmSessionPromise: Promise<BrowserWindow> | null = null;
 let warmQueue: Promise<unknown> = Promise.resolve();
+let browserClosed = false;
 const warmedOrigins = new Set<string>();
 const warmingOrigins = new Map<string, Promise<void>>();
 
@@ -26,6 +27,29 @@ function log(event: string, meta?: Record<string, unknown>): void {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function discardBrowserWindow(win: BrowserWindow | null): void {
+  if (win && !win.isDestroyed()) {
+    win.destroy();
+  }
+}
+
+function throwIfBrowserClosed(): void {
+  if (browserClosed) {
+    throw new Error("Flixcloud browser session was closed");
+  }
+}
+
+/** Destroy the warmed hidden window so closing the app is not blocked. */
+export function destroyFlixcloudBrowser(): void {
+  browserClosed = true;
+  const win = browserWindow;
+  browserWindow = null;
+  warmSessionPromise = null;
+  warmedOrigins.clear();
+  warmingOrigins.clear();
+  discardBrowserWindow(win);
 }
 
 function throwIfAborted(signal: AbortSignal): void {
@@ -48,6 +72,9 @@ function looksLikeCfBlockHtml(bytes: Buffer): boolean {
 async function waitChallenge(win: BrowserWindow, timeoutMs = CHALLENGE_TIMEOUT_MS): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
+    if (win.isDestroyed() || browserClosed) {
+      throw new Error("Flixcloud browser session was closed");
+    }
     const state = (await win.webContents.executeJavaScript(
       `(() => {
         const t = String(document.title || "").toLowerCase();
@@ -75,6 +102,7 @@ async function warmFlixcloudBrowser(): Promise<BrowserWindow> {
     return browserWindow;
   }
 
+  throwIfBrowserClosed();
   const startedAt = Date.now();
   const userAgent = getElectronUserAgent();
   log("browser:warm:start");
@@ -87,11 +115,20 @@ async function warmFlixcloudBrowser(): Promise<BrowserWindow> {
     },
   });
 
+  if (browserClosed) {
+    discardBrowserWindow(win);
+    throwIfBrowserClosed();
+  }
+
   await win.loadURL(FLIXCLOUD_REFERER, {
     userAgent,
     httpReferrer: FLIXCLOUD_REFERER,
   });
   await waitChallenge(win);
+  if (browserClosed) {
+    discardBrowserWindow(win);
+    throwIfBrowserClosed();
+  }
   browserWindow = win;
   warmedOrigins.add(new URL(FLIXCLOUD_REFERER).origin);
   log("browser:warm:done", { ms: Date.now() - startedAt });
@@ -103,6 +140,7 @@ async function getFlixcloudBrowser(): Promise<BrowserWindow> {
   if (existing && !existing.isDestroyed()) {
     return existing;
   }
+  throwIfBrowserClosed();
 
   const inFlight = warmSessionPromise;
   if (inFlight !== null) {
