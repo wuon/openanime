@@ -13,23 +13,16 @@ import {
   SelectValue,
 } from "../ui/select";
 
-const watchEpisodeSelectTriggerClass =
-  "h-8 w-[120px] border-white/25 bg-white/[0.12] text-white shadow-sm backdrop-blur-xl ring-offset-0 ring-offset-transparent placeholder:text-white/55 focus:ring-2 focus:ring-white/30 focus:ring-offset-0 hover:bg-white/[0.18] [&>svg]:text-white/75";
-
-const watchSubtitleSelectTriggerClass =
+const watchSelectTriggerClass =
   "h-8 w-[160px] border-white/25 bg-white/[0.12] text-white shadow-sm backdrop-blur-xl ring-offset-0 ring-offset-transparent placeholder:text-white/55 focus:ring-2 focus:ring-white/30 focus:ring-offset-0 hover:bg-white/[0.18] [&>svg]:text-white/75";
 
-const watchEpisodeSelectContentClass =
+const watchSelectContentClass =
   "z-[120] max-h-[min(24rem,70vh)] rounded-xl border border-white/20 bg-black/50 p-1 text-white shadow-2xl shadow-black/50 backdrop-blur-2xl";
 
-const watchEpisodeSelectItemClass =
+const watchSelectItemClass =
   "rounded-lg py-2 pl-8 pr-2 text-white/95 cursor-pointer focus:bg-white/[0.14] focus:text-white data-[highlighted]:bg-white/[0.14] data-[highlighted]:text-white data-[state=checked]:bg-white/[0.08]";
 
 const SUBTITLES_OFF_VALUE = "__off__";
-
-interface EpisodeOption {
-  index: number;
-}
 
 interface WatchVideoPlayerShellProps {
   playUrl: string;
@@ -48,13 +41,11 @@ interface WatchVideoPlayerShellProps {
   hasShowDetails: boolean;
   showError: string | null;
   currentEpisode: number;
-  episodes: EpisodeOption[];
   videoRef: React.RefObject<HTMLVideoElement>;
   subtitleTracks?: PlayerSubtitleTrack[];
   streamQualities?: Array<{ id: string; label: string }>;
   selectedQuality?: string | null;
   onBack: () => void;
-  onEpisodeSelect: (episode: string) => void;
   onQualitySelect?: (qualityId: string) => void;
   onRetryStream: () => void;
   onLoadedMetadata: React.ReactEventHandler<HTMLVideoElement>;
@@ -77,13 +68,11 @@ export function WatchVideoPlayerShell({
   hasShowDetails,
   showError,
   currentEpisode,
-  episodes,
   videoRef,
   subtitleTracks,
   streamQualities,
   selectedQuality,
   onBack,
-  onEpisodeSelect,
   onQualitySelect,
   onRetryStream,
   onLoadedMetadata,
@@ -96,7 +85,6 @@ export function WatchVideoPlayerShell({
   const hideControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [arePlayerControlsVisible, setArePlayerControlsVisible] = useState(true);
   const [isTopChromeHovered, setIsTopChromeHovered] = useState(false);
-  const [isEpisodeSelectOpen, setIsEpisodeSelectOpen] = useState(false);
   const [isSubtitleSelectOpen, setIsSubtitleSelectOpen] = useState(false);
   const [isQualitySelectOpen, setIsQualitySelectOpen] = useState(false);
   const [activeSubtitleLabel, setActiveSubtitleLabel] = useState<string | null>(null);
@@ -220,7 +208,6 @@ export function WatchVideoPlayerShell({
     Boolean(playbackError) ||
     arePlayerControlsVisible ||
     isTopChromeHovered ||
-    isEpisodeSelectOpen ||
     isSubtitleSelectOpen ||
     isQualitySelectOpen;
 
@@ -338,7 +325,7 @@ export function WatchVideoPlayerShell({
               Loading show...
             </span>
           ) : (
-            `${displayName} (${isDub ? "Dub" : "Sub"})`
+            `${displayName} · Episode ${currentEpisode} (${isDub ? "Dub" : "Sub"})`
           )}
         </span>
         {showError && !hasShowDetails ? (
@@ -355,15 +342,15 @@ export function WatchVideoPlayerShell({
               onOpenChange={setIsQualitySelectOpen}
               disabled={loadingEpisode || !playUrl}
             >
-              <SelectTrigger className={watchSubtitleSelectTriggerClass}>
+              <SelectTrigger className={watchSelectTriggerClass}>
                 <SelectValue placeholder="Quality" />
               </SelectTrigger>
-              <SelectContent className={watchEpisodeSelectContentClass}>
+              <SelectContent className={watchSelectContentClass}>
                 {streamQualities.map((quality) => (
                   <SelectItem
                     key={quality.id}
                     value={quality.id}
-                    className={watchEpisodeSelectItemClass}
+                    className={watchSelectItemClass}
                   >
                     {quality.label}
                   </SelectItem>
@@ -380,18 +367,18 @@ export function WatchVideoPlayerShell({
               onOpenChange={setIsSubtitleSelectOpen}
               disabled={loadingEpisode || !playUrl}
             >
-              <SelectTrigger className={watchSubtitleSelectTriggerClass}>
+              <SelectTrigger className={watchSelectTriggerClass}>
                 <SelectValue placeholder="Subtitles" />
               </SelectTrigger>
-              <SelectContent className={watchEpisodeSelectContentClass}>
-                <SelectItem value={SUBTITLES_OFF_VALUE} className={watchEpisodeSelectItemClass}>
+              <SelectContent className={watchSelectContentClass}>
+                <SelectItem value={SUBTITLES_OFF_VALUE} className={watchSelectItemClass}>
                   Subtitles off
                 </SelectItem>
                 {subtitleTracks.map((track) => (
                   <SelectItem
                     key={`${track.srclang}:${track.label}`}
                     value={track.label}
-                    className={watchEpisodeSelectItemClass}
+                    className={watchSelectItemClass}
                   >
                     {track.label}
                   </SelectItem>
@@ -399,27 +386,6 @@ export function WatchVideoPlayerShell({
               </SelectContent>
             </Select>
           ) : null}
-          <Select
-            value={currentEpisode.toString()}
-            onValueChange={onEpisodeSelect}
-            onOpenChange={setIsEpisodeSelectOpen}
-            disabled={loadingEpisode || showLoading}
-          >
-            <SelectTrigger className={watchEpisodeSelectTriggerClass}>
-              <SelectValue placeholder="Episode" />
-            </SelectTrigger>
-            <SelectContent className={watchEpisodeSelectContentClass}>
-              {episodes.map((ep) => (
-                <SelectItem
-                  key={ep.index}
-                  value={ep.index.toString()}
-                  className={watchEpisodeSelectItemClass}
-                >
-                  Episode {ep.index}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
       </div>
     </div>

@@ -1,9 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
-import { WatchVideoPlayerShell } from "@/renderer/components/player/watch-video-player-shell";
-import type { PlayerSubtitleTrack } from "@/renderer/components/player/videojs-react-player";
 import { DisabledStreamProviderDialog } from "@/renderer/components/disabled-stream-provider-dialog";
+import type { PlayerSubtitleTrack } from "@/renderer/components/player/videojs-react-player";
+import {
+  WatchEpisodeSidebar,
+  buildWatchSidebarEpisodes,
+} from "@/renderer/components/player/watch-episode-sidebar";
+import { WatchVideoPlayerShell } from "@/renderer/components/player/watch-video-player-shell";
 import { Button } from "@/renderer/components/ui/button";
 import { useGoBack } from "@/renderer/hooks/use-go-back";
 import { isHistoryProviderDisabled } from "@/shared/stream-providers";
@@ -47,9 +51,7 @@ function subtitleLangCode(label: string): string {
 function proxySubtitleTracks(
   base: string,
   referer: string,
-  subtitles:
-    | Array<{ url: string; language: string; format: string; default?: boolean }>
-    | undefined
+  subtitles: Array<{ url: string; language: string; format: string; default?: boolean }> | undefined
 ): PlayerSubtitleTrack[] {
   if (!subtitles?.length) return [];
   return subtitles.map((track) => ({
@@ -64,10 +66,10 @@ function buildWatchHistoryEntry(
   episode: Episode,
   ep: string,
   provider: HistoryEntry["provider"],
-  showDetails: RichShowDetails | null
+  showDetails: RichShowDetails | null,
+  mode: Episode["mode"]
 ): HistoryEntry {
   const index = Number(ep);
-  const mode = episode.mode;
   const richList = showDetails?.episodes[mode] ?? [];
   const rich = richList.find((e) => e.index === index);
   const thumb =
@@ -85,6 +87,7 @@ function buildWatchHistoryEntry(
         native: showDetails?.title.native ?? episode.title.native,
       },
       thumbnail: thumb,
+      mode,
     },
     currentDurationMs: 0,
     totalDurationMs: 0,
@@ -140,20 +143,20 @@ export function WatchPage() {
     disabledHistoryProvider ? undefined : streamProviderOverride
   );
 
-  const episodes = useMemo(() => {
-    if (!episode) return [];
-    const richEpisodes = showDetails?.episodes[episode.mode] ?? [];
-    if (richEpisodes.length > 0) return richEpisodes;
-
-    const rawState = episodesByMode[episode.mode];
-    if (rawState.status !== "loaded") return [];
-    return rawState.episodes.map((rawEpisode, idx) => {
-      const parsed = Number(rawEpisode);
-      return { index: Number.isFinite(parsed) ? parsed : idx + 1 };
-    });
-  }, [episode, showDetails, episodesByMode]);
-
   const [currentEpisode, setCurrentEpisode] = useState<number>(() => episode?.index ?? 1);
+  const [playbackMode, setPlaybackMode] = useState<Episode["mode"]>(() => episode?.mode ?? "sub");
+  const playbackModeRef = useRef(playbackMode);
+  playbackModeRef.current = playbackMode;
+
+  const sidebarEpisodes = useMemo(
+    () =>
+      buildWatchSidebarEpisodes(
+        showDetails,
+        episodesByMode,
+        episode?.thumbnail ?? showDetails?.coverImage ?? showDetails?.bannerImage
+      ),
+    [showDetails, episodesByMode, episode?.thumbnail]
+  );
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastHistoryEntryRef = useRef<HistoryEntry | null>(null);
@@ -297,8 +300,11 @@ export function WatchPage() {
   );
 
   const loadStream = useCallback(
-    async (ep: string, opts?: { resumeFrom?: number | null }) => {
+    async (ep: string, opts?: { resumeFrom?: number | null; mode?: Episode["mode"] }) => {
       if (!episode?.providerId || !ep) return;
+      const mode = opts?.mode ?? playbackModeRef.current;
+      playbackModeRef.current = mode;
+      setPlaybackMode(mode);
       activeLoadTokenRef.current += 1;
       const loadToken = activeLoadTokenRef.current;
       setCurrentEpisode(Number(ep));
@@ -329,14 +335,20 @@ export function WatchPage() {
         );
       }
       try {
-        const { url, referer, subtitles, qualities, selectedQuality: defaultQuality, anilistMediaId } =
-          await window.streamProvider.getStreamUrl(
-            episode.id,
-            episode.providerId,
-            ep,
-            episode.mode,
-            streamProviderOverride
-          );
+        const {
+          url,
+          referer,
+          subtitles,
+          qualities,
+          selectedQuality: defaultQuality,
+          anilistMediaId,
+        } = await window.streamProvider.getStreamUrl(
+          episode.id,
+          episode.providerId,
+          ep,
+          mode,
+          streamProviderOverride
+        );
         if (anilistMediaId != null && Number.isInteger(anilistMediaId) && anilistMediaId > 0) {
           const prev = anilistListRef.current;
           if (prev?.mediaId !== anilistMediaId) {
@@ -423,7 +435,8 @@ export function WatchPage() {
           episode,
           ep,
           historyProviderRef.current,
-          null
+          null,
+          mode
         );
         void syncAniListProgress(Number(ep));
       } catch (err) {
@@ -450,9 +463,7 @@ export function WatchPage() {
     // (provider-native numeric ids — e.g. anidb.app — collide with AniList media ids).
     const fromEpisode = Number(episode.id);
     const mediaId =
-      Number.isInteger(fromEpisode) &&
-      fromEpisode > 0 &&
-      episode.id !== episode.providerId
+      Number.isInteger(fromEpisode) && fromEpisode > 0 && episode.id !== episode.providerId
         ? fromEpisode
         : null;
 
@@ -516,6 +527,8 @@ export function WatchPage() {
   useEffect(() => {
     if (!episode) return;
     setCurrentEpisode(episode.index);
+    playbackModeRef.current = episode.mode;
+    setPlaybackMode(episode.mode);
   }, [episode?.id, episode?.providerId, episode?.index, episode?.mode]);
 
   useEffect(() => {
@@ -542,7 +555,8 @@ export function WatchPage() {
       episode,
       pending.ep,
       historyProviderRef.current,
-      showDetails
+      showDetails,
+      playbackModeRef.current
     );
     const video = videoRef.current;
     if (video && !Number.isNaN(video.currentTime) && video.currentTime > 0) {
@@ -575,15 +589,24 @@ export function WatchPage() {
   }, [clearReconnectTimeout]);
 
   const onEpisodeSelect = useCallback(
-    (ep: string) => {
+    (ep: string, mode?: Episode["mode"]) => {
+      const nextMode = mode ?? playbackModeRef.current;
+      if (Number(ep) === currentEpisode && nextMode === playbackModeRef.current) return;
       setCurrentEpisode(Number(ep));
       anilistSyncedEpisodeRef.current = null;
       void (async () => {
         await syncHistoryProgress();
-        await loadStream(ep);
+        await loadStream(ep, { mode: nextMode });
       })();
     },
-    [loadStream, syncHistoryProgress]
+    [currentEpisode, loadStream, syncHistoryProgress]
+  );
+
+  const onSidebarSelect = useCallback(
+    (index: number, mode: Episode["mode"]) => {
+      onEpisodeSelect(String(index), mode);
+    },
+    [onEpisodeSelect]
   );
 
   const onQualitySelect = useCallback(
@@ -785,33 +808,43 @@ export function WatchPage() {
     "Unknown";
 
   return (
-    <WatchVideoPlayerShell
-      playUrl={playUrl}
-      streamRevision={streamRevision}
-      loadingEpisode={loadingEpisode}
-      transcodeProgress={transcodeProgress}
-      streamError={error}
-      playbackError={playbackError}
-      displayName={displayName}
-      isDub={episode.mode === "dub"}
-      showLoading={showLoading}
-      hasShowDetails={Boolean(showDetails)}
-      showError={showError}
-      currentEpisode={currentEpisode}
-      episodes={episodes}
-      videoRef={videoRef}
-      subtitleTracks={subtitleTracks}
-      streamQualities={streamQualities}
-      selectedQuality={selectedQuality}
-      onBack={goBack}
-      onEpisodeSelect={onEpisodeSelect}
-      onQualitySelect={onQualitySelect}
-      onRetryStream={retryStream}
-      onLoadedMetadata={handleVideoLoadedMetadata}
-      onPause={handleVideoPause}
-      onEnded={handleVideoEnded}
-      onPlaying={handleVideoPlaying}
-      onError={handleVideoError}
-    />
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col lg:flex-row">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <WatchVideoPlayerShell
+          playUrl={playUrl}
+          streamRevision={streamRevision}
+          loadingEpisode={loadingEpisode}
+          transcodeProgress={transcodeProgress}
+          streamError={error}
+          playbackError={playbackError}
+          displayName={displayName}
+          isDub={playbackMode === "dub"}
+          showLoading={showLoading}
+          hasShowDetails={Boolean(showDetails)}
+          showError={showError}
+          currentEpisode={currentEpisode}
+          videoRef={videoRef}
+          subtitleTracks={subtitleTracks}
+          streamQualities={streamQualities}
+          selectedQuality={selectedQuality}
+          onBack={goBack}
+          onQualitySelect={onQualitySelect}
+          onRetryStream={retryStream}
+          onLoadedMetadata={handleVideoLoadedMetadata}
+          onPause={handleVideoPause}
+          onEnded={handleVideoEnded}
+          onPlaying={handleVideoPlaying}
+          onError={handleVideoError}
+        />
+      </div>
+      <WatchEpisodeSidebar
+        episodes={sidebarEpisodes}
+        currentEpisode={currentEpisode}
+        currentMode={playbackMode}
+        loading={showLoading}
+        selecting={loadingEpisode}
+        onSelectEpisode={onSidebarSelect}
+      />
+    </div>
   );
 }
