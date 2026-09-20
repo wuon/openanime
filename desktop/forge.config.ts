@@ -23,8 +23,9 @@ const config: ForgeConfig = {
     // If this differs (e.g. "openanime"), the .deb step fails on Linux CI.
     executableName: "Openanime",
     /**
-     * Ship external helper binaries/scripts alongside the app so the main
-     * process can execute them even when running from a packaged build.
+     * Ship ffmpeg alongside the app so the main process can execute it from a
+     * packaged build. The binary is downloaded into bin/ by scripts/download-ffmpeg.mjs
+     * (npm install / package) — it is not committed.
      */
     extraResource: isWindows ? ["bin/ffmpeg.exe"] : ["bin/ffmpeg"],
   },

@@ -90,3 +90,8 @@ typings/
 
 # Electron-Forge
 out/
+
+# ffmpeg is downloaded by scripts/download-ffmpeg.mjs (not committed)
+bin/ffmpeg
+bin/ffmpeg.exe
+bin/.ffmpeg-version

@@ -181,6 +181,8 @@ See `src/main/electron-user-agent.ts`.
 - Rewrites **HLS** manifests so segment URLs also go through the proxy.
 - Optionally **transcodes** HLS to progressive MP4 (`transcode=1`; requires bundled ffmpeg).
 
+`npm install` (and package/make) downloads a pinned ffmpeg build into `desktop/bin/` via `scripts/download-ffmpeg.mjs`. Do not commit `ffmpeg` / `ffmpeg.exe`. Set `FFMPEG_FORCE=1` to re-download.
+
 The renderer builds proxy URLs in `src/renderer/pages/watch-page.tsx`:
 
 ```typescript

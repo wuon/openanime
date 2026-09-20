@@ -26,6 +26,10 @@ jobs:
         run: npm ci
         working-directory: desktop
 
+      - name: Download ffmpeg
+        run: npm run download-ffmpeg
+        working-directory: desktop
+
       - name: Publish app
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

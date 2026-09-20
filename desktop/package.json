@@ -5,8 +5,13 @@
   "description": "An easy to use anime desktop app with a provider-based architecture, combining a familiar streaming workflow with a modern UI.",
   "main": ".vite/build/main.js",
   "scripts": {
+    "postinstall": "node ./scripts/download-ffmpeg.mjs",
+    "download-ffmpeg": "node ./scripts/download-ffmpeg.mjs",
+    "prestart": "node ./scripts/download-ffmpeg.mjs",
     "start": "electron-forge start",
+    "prepackage": "node ./scripts/download-ffmpeg.mjs",
     "package": "electron-forge package",
+    "premake": "node ./scripts/download-ffmpeg.mjs",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
