@@ -13,7 +13,7 @@ import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import { createGunzip } from "node:zlib";
 
-const VERSION = "b6.1.1";
+const VERSION = "b4.4.1";
 const RELEASE_BASE = `https://github.com/eugeneware/ffmpeg-static/releases/download/${VERSION}`;
 
 /** @typedef {{ asset: string, sha256: string, binary: string }} FfmpegBuild */
@@ -21,28 +21,28 @@ const RELEASE_BASE = `https://github.com/eugeneware/ffmpeg-static/releases/downl
 /** @type {Record<string, FfmpegBuild>} */
 const BUILDS = {
   "darwin-arm64": {
-    asset: "ffmpeg-darwin-arm64.gz",
-    sha256: "8923876afa8db5585022d7860ec7e589af192f441c56793971276d450ed3bbfa",
+    asset: "darwin-arm64.gz",
+    sha256: "a9f5e7b8c10cbed188a945ae893d753296a5561683af3a354ff41b42c8841e54",
     binary: "ffmpeg",
   },
   "darwin-x64": {
-    asset: "ffmpeg-darwin-x64.gz",
-    sha256: "929b375c1182d956c51f7ac25e0b2b0411fb01f6f407aa15c9758efeb4242106",
+    asset: "darwin-x64.gz",
+    sha256: "b3231bfd8304cade21bac9c9ddb2ff2aad710627d84bc985580166d6df3aa63e",
     binary: "ffmpeg",
   },
   "linux-arm64": {
-    asset: "ffmpeg-linux-arm64.gz",
-    sha256: "754a678672298bc68156adff58aa7385a592c2b30b1d0ae8750c45c915c4bac0",
+    asset: "linux-arm64.gz",
+    sha256: "c4633e344b2c8e8a38990821a4c27eb956425d5fabc349f526a2bd2eb3eb791c",
     binary: "ffmpeg",
   },
   "linux-x64": {
-    asset: "ffmpeg-linux-x64.gz",
-    sha256: "bfe8a8fc511530457b528c48d77b5737527b504a3797a9bc4866aeca69c2dffa",
+    asset: "linux-x64.gz",
+    sha256: "e8eb59e6d519eef28e571111dbc200a2c58a4d17be5f3f7eac41fb066d3f1a0f",
     binary: "ffmpeg",
   },
   "win32-x64": {
-    asset: "ffmpeg-win32-x64.gz",
-    sha256: "8883a3dffbd0a16cf4ef95206ea05283f78908dbfb118f73c83f4951dcc06d77",
+    asset: "win32-x64.gz",
+    sha256: "7277536c2a8cb46c7ee687e8247f906a1c8939b920ea34000e3766501e3a0bf4",
     binary: "ffmpeg.exe",
   },
 };
